@@ -15,7 +15,8 @@ services:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - gis-network
-    ports: ["8000:8000"]
+    ports:
+      - "${DB_HOST_PORT}:5432"
 
   tileserver:
     image: pramsey/pg_tileserv:latest # Or neteler/postgis-t-rex # Or crunchydata/pg_tileserv
@@ -30,7 +31,8 @@ services:
         condition: service_healthy # Waits for healthcheck to pass
     networks:
       - gis-network
-    ports: ["7800:7800"]
+    ports:
+      - "${TILES_HOST_PORT}:7800"
 
   backend:
     build:

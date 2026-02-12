@@ -12,7 +12,7 @@ services:
       # Optionally keep a container-only venv or cache (avoids overwriting by host)
       - /app/.venv
     ports:
-      - "8001:8000"
+      - "${BACKEND_HOST_PORT}:8000"
     environment:
       DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@db:5432/geoportal
       HTTP_PROXY: ${HTTP_PROXY}
@@ -35,7 +35,7 @@ services:
       # Persist container-installed node_modules (don't override with host)
       - /app/node_modules
     ports:
-      - "3000:5173"
+      - "${FRONTEND_HOST_PORT}:5173"
     environment:
       HTTP_PROXY: ${HTTP_PROXY}
       HTTPS_PROXY: ${HTTPS_PROXY}
