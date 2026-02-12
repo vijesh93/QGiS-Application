@@ -1,0 +1,9 @@
+-- Replace 'your_layer_table' with the actual name
+CREATE INDEX idx_your_layer_table_geom 
+ON your_layer_table 
+USING GIST (geom);
+
+# Resources:
+https://www.youtube.com/watch?v=KXZGO8S4siA
+
+https://www.google.com/search?q=https://www.youtube.com/watch%3Fv%3Djeafreezy-roadmap

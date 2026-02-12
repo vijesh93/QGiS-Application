@@ -1,0 +1,59 @@
+services:
+  db:
+    image: postgis/postgis:15-3.3
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d geoportal"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: geoportal
+    volumes:
+      - ./database/init:/docker-entrypoint-initdb.d  # The "Magic" mapping
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - gis-network
+    ports: ["8000:8000"]
+
+  tileserver:
+    image: pramsey/pg_tileserv:latest # Or neteler/postgis-t-rex # Or crunchydata/pg_tileserv
+    environment:
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@db:5432/geoportal
+      HTTP_PROXY: ${HTTP_PROXY}
+      HTTPS_PROXY: ${HTTPS_PROXY}
+      NO_PROXY: ${NO_PROXY}
+    restart: on-failure  # Add this
+    depends_on:
+      db:
+        condition: service_healthy # Waits for healthcheck to pass
+    networks:
+      - gis-network
+    ports: ["7800:7800"]
+
+  backend:
+    build:
+      context: ./backend
+      args:
+        HTTP_PROXY: ${HTTP_PROXY}
+        HTTPS_PROXY: ${HTTPS_PROXY}
+        NO_PROXY: ${NO_PROXY}
+    environment:
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@db:5432/geoportal
+      HTTP_PROXY: ${HTTP_PROXY}
+      HTTPS_PROXY: ${HTTPS_PROXY}
+      NO_PROXY: ${NO_PROXY}
+    restart: on-failure  # Add this
+    depends_on:
+      db:
+        condition: service_healthy # Waits for healthcheck to pass
+    networks:
+      - gis-network
+
+networks:
+  gis-network:
+    driver: bridge
+
+volumes:
+  postgres_data:

@@ -1,0 +1,15 @@
+# Database data (the volume we created)
+data/
+postgres_data/
+
+# Environment secrets
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+
+# Node
+node_modules/
+dist/

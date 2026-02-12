@@ -1,0 +1,42 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      args:
+        HTTP_PROXY: ${HTTP_PROXY}
+        HTTPS_PROXY: ${HTTPS_PROXY}
+        NO_PROXY: ${NO_PROXY}
+    volumes:
+      # Bind-mount the backend source so edits inside container reflect on host
+      - ./backend:/app
+      # Optionally keep a container-only venv or cache (avoids overwriting by host)
+      - /app/.venv
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@db:5432/geoportal
+      HTTP_PROXY: ${HTTP_PROXY}
+      HTTPS_PROXY: ${HTTPS_PROXY}
+      NO_PROXY: ${NO_PROXY}
+    command: uvicorn main:app --host 0.0.0.0 --reload # Enables hot-reload
+    depends_on:
+      - db
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        HTTP_PROXY: ${HTTP_PROXY}
+        HTTPS_PROXY: ${HTTPS_PROXY}
+        NO_PROXY: ${NO_PROXY}
+    volumes:
+      # Bind-mount the frontend source so edits inside container reflect on host
+      - ./frontend:/app
+      # Persist container-installed node_modules (don't override with host)
+      - /app/node_modules
+    ports:
+      - "3000:5173"
+    environment:
+      HTTP_PROXY: ${HTTP_PROXY}
+      HTTPS_PROXY: ${HTTPS_PROXY}
+      NO_PROXY: ${NO_PROXY}

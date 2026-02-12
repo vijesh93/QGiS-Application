@@ -1,0 +1,54 @@
+from fastapi import APIRouter, Depends, HTTPException, Query
+from typing import List, Optional
+from sqlmodel import Session, select
+from models.db_models.db_model import Layer as LayerModel
+from schemas.layer import LayerRead
+from db import get_session
+from repositories.example_safe_querry import get_features_geojson
+
+router = APIRouter()
+
+
+@router.get("/layers", response_model=List[LayerRead])
+def list_layers(session: Session = Depends(get_session)):
+    stmt = select(LayerModel)
+    results = session.exec(stmt).all()
+    return results
+
+
+@router.get("/layers/{layer_name}", response_model=LayerRead)
+def get_layer(layer_name: str, session: Session = Depends(get_session)):
+    stmt = select(LayerModel).where(LayerModel.name == layer_name)
+    layer = session.exec(stmt).first()
+    if not layer:
+        raise HTTPException(status_code=404, detail="Layer not found")
+    return layer
+
+
+@router.get("/layers/{layer_name}/features")
+def get_layer_features(
+    layer_name: str,
+    bbox: Optional[str] = Query(None, description="xmin,ymin,xmax,ymax"),
+    limit: int = Query(100, lte=1000),
+    session: Session = Depends(get_session),
+):
+    # Validate the layer exists (whitelist table names)
+    stmt = select(LayerModel).where(LayerModel.name == layer_name)
+    layer = session.exec(stmt).first()
+    if not layer:
+        raise HTTPException(status_code=404, detail="Layer not found")
+
+    # Parse bbox param
+    bbox_tuple = None
+    if bbox:
+        try:
+            parts = [float(x) for x in bbox.split(",")]
+            if len(parts) != 4:
+                raise ValueError
+            bbox_tuple = (parts[0], parts[1], parts[2], parts[3])
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid bbox format. Use xmin,ymin,xmax,ymax")
+
+    # Use the safe feature query (table_name already validated)
+    geojson = get_features_geojson(session, layer_name, bbox=bbox_tuple, limit=limit)
+    return geojson

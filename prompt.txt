@@ -1,0 +1,23 @@
+First Prompt:
+
+I want to create a application/service and host it on a server 
+
+Development:
+
+- Start dev environment (bind-mounts will reflect container edits on host):
+
+	```powershell
+	docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+	```
+
+- Stop and remove containers:
+
+	```powershell
+	docker compose -f docker-compose.yml -f docker-compose.dev.yml down
+	```
+
+- Notes:
+	- The `docker-compose.dev.yml` file bind-mounts `./backend` and `./frontend` into containers so edits inside containers are immediately visible on the host filesystem.
+	- On Windows ensure Docker Desktop has file sharing enabled for your project drive or use WSL2 backend for better performance.
+	- Bind-mounting hides files that were copied into the image at build time; `docker-compose.dev.yml` is intended for development only.
+	- If you see slow file IO on Windows, consider using WSL2, Mutagen, or Docker Sync as alternatives.
