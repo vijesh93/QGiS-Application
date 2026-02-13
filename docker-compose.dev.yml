@@ -14,7 +14,7 @@ services:
     ports:
       - "${BACKEND_HOST_PORT}:8000"
     environment:
-      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@db:5432/geoportal
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD_URL}@db:5432/geoportal
       HTTP_PROXY: ${HTTP_PROXY}
       HTTPS_PROXY: ${HTTPS_PROXY}
       NO_PROXY: ${NO_PROXY}

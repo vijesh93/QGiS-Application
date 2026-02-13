@@ -21,7 +21,7 @@ services:
   tileserver:
     image: pramsey/pg_tileserv:latest # Or neteler/postgis-t-rex # Or crunchydata/pg_tileserv
     environment:
-      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@db:5432/geoportal
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD_URL}@db:5432/geoportal
       HTTP_PROXY: ${HTTP_PROXY}
       HTTPS_PROXY: ${HTTPS_PROXY}
       NO_PROXY: ${NO_PROXY}
@@ -42,10 +42,13 @@ services:
         HTTPS_PROXY: ${HTTPS_PROXY}
         NO_PROXY: ${NO_PROXY}
     environment:
-      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@db:5432/geoportal
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD_URL}@db:5432/geoportal
       HTTP_PROXY: ${HTTP_PROXY}
       HTTPS_PROXY: ${HTTPS_PROXY}
       NO_PROXY: ${NO_PROXY}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_PASSWORD_URL: ${DB_PASSWORD_URL}
     restart: on-failure  # Add this
     depends_on:
       db:
