@@ -3,6 +3,7 @@ import Sidebar from './components/Sidebar';
 import MapView from './features/map/MapView';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
+
 function App() {
   const [transparency, setTransparency] = useState(100);
 
