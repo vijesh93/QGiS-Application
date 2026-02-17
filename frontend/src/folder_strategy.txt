@@ -1,0 +1,11 @@
+src/styles/: Put index.css here. If ever need custom CSS (like specific map cursor styles), 
+    put them in this folder.
+
+src/main.jsx: This is the "glue." It connects your App.jsx to the index.html. 
+    It should usually only be touched to add global imports like CSS or Providers.
+
+src/api/: Later, it is needed to create a file here like layersApi.js 
+    to hold your axios calls to your FastAPI backend.
+
+src/pages/: If a "Dashboard" page is needed and a "Map" page, 
+    we would create MapPage.jsx and DashboardPage.jsx here.

@@ -1,4 +1,5 @@
-FROM node:20-alpine
+# FROM node:20-alpine
+FROM node:20-slim
 
 # Allow build-time proxy args to be passed via docker-compose build args
 ARG HTTP_PROXY
@@ -12,7 +13,14 @@ ENV NO_PROXY=${NO_PROXY}
 
 WORKDIR /app
 
-# Install dependencies first (for faster builds)
+# Install system dependencies if needed (e.g., for some canvas/map libs)
+RUN apt-get update && apt-get install -y \
+    python3 \
+    make \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install dependencies (for faster builds) and copy package files first for better caching
 COPY package.json ./
 RUN npm install
 
@@ -22,4 +30,4 @@ COPY . .
 # Expose Vite's default port
 EXPOSE 5173
 
-CMD ["npm", "run", "dev"]
+CMD ["npm", "run", "dev", "--host"]

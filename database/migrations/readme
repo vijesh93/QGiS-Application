@@ -1,0 +1,6 @@
+. Future-Proofing for GenAI
+To prepare for Agentic AI (e.g., a chatbot that says "Show me all layers related to wind energy in Stuttgart"), we have already:
+
+Isolated the Backend: Your FastAPI app can later integrate libraries like LangChain or OpenAI easily.
+
+Vector Ready: PostGIS (your database) is actually excellent at storing "Vector Embeddings" (AI data) using an extension called pgvector. You won't need a separate database for your AI features later.

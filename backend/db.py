@@ -1,25 +1,26 @@
-from sqlmodel import Session, create_engine
 import os
-from urllib.parse import quote_plus
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
-
-# Central DB engine and session provider used across the backend
+# 1. Get components (optional, but good for debugging)
 user_name = os.getenv("DB_USER")
 encoded_password = os.getenv("DB_PASSWORD_URL")
 
-# Try to get the full URL from env, otherwise build it using f-string
+# 2. Get the URL. If it doesn't exist, build it.
 DATABASE_URL = os.getenv("DATABASE_URL")
+
 if not DATABASE_URL:
     DATABASE_URL = f"postgresql://{user_name}:{encoded_password}@db:5432/geoportal"
 
-else:
-    # TODO: Figure out what is better way to enter a password for DB.
-    raise NotImplementedError
+print(f"✅ Backend connecting to: {DATABASE_URL.split('@')[1]}") # Prints 'db:5432/geoportal' for safety
 
-# print(f"Connecting to: {DATABASE_URL.replace(encoded_password, '****')}") # Safety print
+# 3. Create engine
 engine = create_engine(DATABASE_URL)
-
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def get_session():
-    with Session(engine) as session:
-        yield session
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()

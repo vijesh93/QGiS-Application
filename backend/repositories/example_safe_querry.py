@@ -2,6 +2,8 @@
 # then build query safely — DO NOT interpolate unvalidated table names
 # instead use a whitelist from layer_metadata.name
 # Example (conceptual; requires careful parameterization):
+# TODO: (Important: validate table_name via layer_metadata before using it in the SQL above.)
+
 
 def get_features_geojson(session, table_name, bbox=None, limit=100):
     # assume table_name has already been validated/whitelisted
