@@ -72,8 +72,8 @@ def explore_tiff(file_path: str, read_raw: bool = False):
 
 if __name__ == "__main__":
     # Define your internal data folder
-    DATA_DIR = "./Example_download" 
-    
+    DATA_DIR = "./data_files/Raster" 
+
     print(f"--- Scanning directory: {DATA_DIR} ---")
     tiff_files = scan_data_directory(DATA_DIR)
     print(f"Found {len(tiff_files)} TIFF files.\n")
@@ -88,3 +88,29 @@ if __name__ == "__main__":
             print("-" * 30)
         except Exception as e:
             print(f"Error reading {tiff_path.name}: {e}")
+    
+    # For last file:
+    # Spatial Metadata
+    with rasterio.open(tiff_path) as src:
+        print(f"=== File: {src.name} ===")
+        print(f"Bands: {src.count}")
+        print(f"Width/Height: {src.width}x{src.height}")
+        print(f"CRS: {src.crs}")
+        
+        # The Affine Transform: Maps pixel (row, col) -> (lon, lat)
+        # It looks like: [width of pixel, rotation, upper-left X, rotation, height of pixel, upper-left Y]
+        print(f"Transform (Affine):\n{src.transform}")
+        data_array = src.read(1) 
+        print("\n=== Raw Data Analysis ===")
+        print(f"Data Type: {data_array.dtype}")
+        print(f"Min Value: {np.min(data_array)}")
+        print(f"Max Value: {np.max(data_array)}")
+        print(f"Average Value: {np.mean(data_array):.2f}")
+
+        # Look at a small 5x5 slice of pixels from the top-left corner
+        print("\nTop-Left 5x5 Pixel Grid (Raw Values):")
+        print(data_array[0:5, 0:5])
+
+        # Coordinate Lookup: What is the GPS coord of the top-left pixel?
+        lon, lat = src.xy(0, 0) # (row 0, col 0)
+        print(f"\nCoordinate of pixel [0,0]: {lon}, {lat}")

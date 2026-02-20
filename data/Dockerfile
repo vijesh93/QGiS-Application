@@ -38,6 +38,9 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
+# If needed: ipython kernel
+RUN python -m ipykernel install --name "raster_env" --display-name "Python (raster_env)"
+
 # Copy the rest of your application code
 COPY . .
 

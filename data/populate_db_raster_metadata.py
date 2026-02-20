@@ -10,7 +10,8 @@ Insert all this into your layer_metadata table.
 
 import os
 import rasterio
-from sqlalchemy import create_url, create_engine, text
+from sqlalchemy import create_engine, text
+from sqlalchemy.engine import make_url
 from rio_cogeo.cogeo import cog_validate, cog_translate
 from rio_cogeo.profiles import cog_profiles
 from pathlib import Path
