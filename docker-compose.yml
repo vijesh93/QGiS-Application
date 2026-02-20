@@ -18,7 +18,8 @@ services:
     ports:
       - "${DB_HOST_PORT}:5432"
 
-  tileserver:
+# tileserv: Ideal for vectors (Strems winds etc)
+  tileserver: # TODO: IMPORTANT: Check: Probably need to replace/extend this with pg_titiler 
     image: pramsey/pg_tileserv:latest # Or neteler/postgis-t-rex # Or crunchydata/pg_tileserv
     environment:
       DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD_URL}@db:5432/geoportal
@@ -32,7 +33,22 @@ services:
     networks:
       - gis-network
     ports:
-      - "${TILES_HOST_PORT}:7800"
+      - "${TILESERV_HOST_PORT}:7800"
+
+  # Tttiler: Ideal for image and various hirarchies of image
+  raster-server:
+    image: ghcr.io/developmentseed/titiler:latest
+    environment:
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD_URL}@db:5432/geoportal
+      HTTP_PROXY: ${HTTP_PROXY}
+      HTTPS_PROXY: ${HTTPS_PROXY}
+      NO_PROXY: ${NO_PROXY}
+    volumes:
+      - ./data:/data
+    ports:
+      - "${TITILER_HOST_PORT}:8000"
+    networks:
+      - gis-network
 
   backend:
     build:
@@ -49,7 +65,7 @@ services:
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
       DB_PASSWORD_URL: ${DB_PASSWORD_URL}
-    restart: on-failure  # Add this
+    restart: on-failure  # This restarts the service automatically
     depends_on:
       db:
         condition: service_healthy # Waits for healthcheck to pass

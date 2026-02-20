@@ -1,3 +1,32 @@
+"""
+# Needs to be modified as per the following: To include raster and titiler supprt
+CREATE TABLE IF NOT EXISTS layer_metadata (
+    id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE,          -- Internal ID
+    display_name TEXT NOT NULL,
+    category TEXT,
+    
+    -- ARCHITECTURE PIVOT:
+    -- Store the path to the file instead of the pixels in the DB
+    file_path TEXT NOT NULL,            -- e.g., "/app/data/nature_reserves.tif"
+    
+    -- Metadata for the frontend
+    geometry_type TEXT DEFAULT 'RASTER', -- 'RASTER' or 'VECTOR'
+    srid INTEGER DEFAULT 4326,
+    min_zoom INTEGER DEFAULT 0,
+    max_zoom INTEGER DEFAULT 22,
+    
+    -- Bounding box for "Zoom to Layer" feature
+    bbox_xmin DOUBLE PRECISION,
+    bbox_ymin DOUBLE PRECISION,
+    bbox_xmax DOUBLE PRECISION,
+    bbox_ymax DOUBLE PRECISION,
+
+    is_visible_by_default BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+"""
+
 --
 -- Schema: layer metadata and example spatial table
 --

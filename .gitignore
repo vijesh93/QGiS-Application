@@ -1,5 +1,5 @@
 # Database data (the volume we created)
-data/
+data_files/
 postgres_data/
 
 # Environment secrets
@@ -13,3 +13,9 @@ __pycache__/
 # Node (Frontend)
 node_modules/
 dist/
+
+# Tif data
+*.Tif
+*.tif
+*.Tiff
+*.tiff
