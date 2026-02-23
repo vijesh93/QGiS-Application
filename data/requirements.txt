@@ -19,3 +19,6 @@ matplotlib==3.8.2
 # SQL realted
 psycopg2-binary
 sqlalchemy
+
+# http requests
+requests

@@ -22,6 +22,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxext6 \
     libxrender-dev \
     build-essential \
+    gdal-bin \
+    libgdal-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Set the working directory inside the container
@@ -39,7 +41,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
 # If needed: ipython kernel
-RUN python -m ipykernel install --name "raster_env" --display-name "Python (raster_env)"
+# RUN python -m ipykernel install --name "raster_env" --display-name "Python (raster_env)"
 
 # Copy the rest of your application code
 COPY . .
