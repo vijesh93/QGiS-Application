@@ -1,33 +1,26 @@
-from sqlmodel import Session, select
-from models.db_models.db_model import Layer
-import geojson
+"""
+Docstring for backend.services.layer_service:
+
+This script implements the layer related business logic, i.e., the python controler is redirected here from the API entry point!
+"""
+
+from sqlmodel import Session 
+from repositories.layer_repo import LayerRepository
+from schemas.layer import CategorySummary
 
 
 class LayerService:
-    def __init__(self, engine):
-        self.engine = engine
+    def __init__(self, session: Session):
+        self.repo = LayerRepository(session)
 
-    def get_all_active_layers(self):
-        """
-        Business Logic: Fetch all layers that are marked as active
-        to display in the frontend sidebar.
-        """
-        with Session(self.engine) as session:
-            statement = select(Layer).where(Layer.is_visible_by_default == True)
-            results = session.exec(statement)
-            return results.all()
+    def list_categories(self):
+        results = self.repo.get_categories()
+        return [CategorySummary(category=r[0], count=r[1]) for r in results]
 
-    def get_layer_stats(self, layer_name: str):
-        """
-        Example Business Layer processing: 
-        Instead of just raw data, calculate something useful.
-        """
-        with Session(self.engine) as session:
-            # We use raw SQL here because spatial functions are specific to PostGIS
-            query = f"SELECT count(*), ST_Area(ST_Union(geom)) FROM {layer_name}"
-            stats = session.execute(query).fetchone()
-            return {
-                "count": stats[0],
-                "total_area_sq_meters": stats[1]
-            }
-        
+    def list_categories(self):
+        results = self.repo.get_categories()
+        # Explicitly map the DB tuple to the Pydantic schema
+        return [CategorySummary(category=r[0], layer_count=r[1]) for r in results]
+
+    def get_category_layers(self, category: str):
+        return self.repo.get_by_category(category)

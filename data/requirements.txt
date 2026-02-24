@@ -1,0 +1,24 @@
+# Image Processing
+opencv-python-headless==4.9.0.80
+Pillow==10.2.0
+
+# Geospatial Raster Analysis (Crucial for Map Data)
+rasterio==1.3.9
+rio-cogeo
+geopandas==0.14.3
+rioxarray==0.15.1
+
+# Core Data Science & Math
+numpy==1.26.4
+pandas==2.2.0
+scipy==1.12.0
+
+# Visualization (if you plan to generate plots/charts)
+matplotlib==3.8.2
+
+# SQL realted
+psycopg2-binary
+sqlalchemy
+
+# http requests
+requests

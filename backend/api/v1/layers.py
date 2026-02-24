@@ -52,3 +52,30 @@ def get_layer_features(
     # Use the safe feature query (table_name already validated)
     geojson = get_features_geojson(session, layer_name, bbox=bbox_tuple, limit=limit)
     return geojson
+
+
+# Modify based on the following code:
+"""
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy.orm import Session
+from db import get_db
+from services.layer_service import LayerService
+from schemas.layer import LayerRead, CategorySummary
+from typing import List
+
+
+router = APIRouter(prefix="/layers", tags=["layers"])
+
+@router.get("/categories", response_model=List[CategorySummary])
+def get_categories(db: Session = Depends(get_db)):
+    # Step 1: Frontend calls this to build the sidebar folders.
+    return LayerService(db).list_categories()
+
+@router.get("/", response_model=List[LayerRead])
+def get_layers(
+    category: str = Query(..., description="Category to filter by"), 
+    db: Session = Depends(get_db)
+):
+    # Step 2: Frontend calls this when a folder is opened
+    return LayerService(db).get_category_layers(category)
+"""

@@ -40,3 +40,30 @@ services:
       HTTP_PROXY: ${HTTP_PROXY}
       HTTPS_PROXY: ${HTTPS_PROXY}
       NO_PROXY: ${NO_PROXY}
+  
+  data-loader:
+    build:
+      context: ./data
+      args:
+        HTTP_PROXY: ${HTTP_PROXY}
+        HTTPS_PROXY: ${HTTPS_PROXY}
+        NO_PROXY: ${NO_PROXY}
+    container_name: geospatial-data-loader
+    volumes:
+      - ./data:/app
+      - ./backend:/backend_src # Optional: to share models
+    environment:
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD_URL}@db:5432/geoportal
+      HTTP_PROXY: ${HTTP_PROXY}
+      HTTPS_PROXY: ${HTTPS_PROXY}
+      NO_PROXY: ${NO_PROXY}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_PASSWORD_URL: ${DB_PASSWORD_URL}
+    restart: on-failure  # This restarts the service automatically
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - gis-network
+    tty: true
