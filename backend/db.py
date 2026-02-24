@@ -1,6 +1,8 @@
 import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlmodel import Session, create_engine
+
 
 # 1. Get components (optional, but good for debugging)
 user_name = os.getenv("DB_USER")
@@ -18,7 +20,13 @@ print(f"✅ Backend connecting to: {DATABASE_URL.split('@')[1]}") # Prints 'db:5
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
+
 def get_session():
+    with Session(engine) as session:
+        yield session
+
+
+def sqlalchemy():
     db = SessionLocal()
     try:
         yield db

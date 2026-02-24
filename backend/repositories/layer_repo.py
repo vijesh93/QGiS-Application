@@ -1,22 +1,39 @@
 # This handles the raw SQL communication.
 
-from sqlmodel import Session, select
-from backend.models.db_models.db_model import Layer
+from sqlmodel import Session, select, func
+from models.db_models.db_model import Layer
+from typing import List
 
 
 # DAO
 class LayerRepository:
     def __init__(self, session: Session):
         self.session = session
+    
+    def get_categories(self):
+        # Equivalent to SELECT category, count(*) GROUP BY category
+        statement = select(Layer.category, func.count(Layer.id)).group_by(Layer.category)
+        return self.session.exec(statement).all()
 
-    def get_by_name(self, name: str) -> Layer | None:
-        stmt = select(Layer).where(Layer.name == name)
+    def get_by_category(self, category: str) -> List[Layer]:
+        statement = select(Layer).where(Layer.category == category).where(Layer.is_active == True)
+        return self.session.exec(statement).all()
+
+    def get_by_slug(self, slug: str) -> Layer:
+        statement = select(Layer).where(Layer.slug == slug)
+        return self.session.exec(statement).first()
+
+    def get_by_display_name(self, name: str) -> Layer | None:
+        stmt = select(Layer).where(Layer.display_name == name)
         return self.session.exec(stmt).first()
 
+
+    """
+    # Might have to add this in future, but needs db model modification
     def list_active(self):
         stmt = select(Layer).where(Layer.is_visible_by_default == True)
         return self.session.exec(stmt).all()
-
+    """
 # Reference code to integrate: 
 """
 from sqlalchemy.orm import Session
