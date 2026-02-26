@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>GIS Debug Map</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        #map { height: 85vh; width: 100%; background: #eee; }
+        body { font-family: sans-serif; padding: 20px; }
+        .panel { margin-bottom: 10px; padding: 10px; border: 1px solid #ccc; }
+    </style>
+</head>
+<body>
+    <div class="panel">
+        <button id="loadBtn">1. Start Test</button>
+        <strong id="status">Status: Waiting for click...</strong>
+    </div>
+    <div id="map"></div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        // Initialize map
+        const map = L.map('map').setView([48.7, 9.2], 7);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+        document.getElementById('loadBtn').addEventListener('click', async () => {
+            const status = document.getElementById('status');
+            console.log("Button clicked. Starting fetch...");
+            status.innerText = "Status: Connecting to Backend...";
+
+            try {
+                // Change 'localhost' to '127.0.0.1' just in case of DNS issues
+                const response = await fetch('http://127.0.0.1:8000/api/v1/layers/?category=Environment');
+                
+                console.log("Response received:", response.status);
+                
+                if (!response.ok) {
+                    throw new Error(`Backend Error: ${response.status}`);
+                }
+
+                const data = await response.json();
+                console.log("Data loaded:", data);
+
+                if (!data || data.length === 0) {
+                    status.innerText = "Status: No layers found.";
+                    return;
+                }
+
+                const layer = data[0];
+                status.innerText = `Status: Loading ${layer.display_name}...`;
+
+                // Build TiTiler URL
+                const titilerUrl = `http://127.0.0.1:8080/cog/tiles/WebMercatorQuad/{z}/{x}/{y}.png?url=${layer.file_path}&rescale=-1,1&colormap_name=viridis`;
+                console.log("TiTiler URL:", titilerUrl);
+
+                L.tileLayer(titilerUrl, { opacity: 0.8 }).addTo(map);
+
+                if (layer.extent) {
+                    // Our backend now sends a JSON object, not a string
+                    const bounds = L.geoJSON(layer.extent).getBounds();
+                    map.fitBounds(bounds);
+                }
+
+                status.innerText = "Status: Success!";
+            } catch (error) {
+                console.error("CRITICAL ERROR:", error);
+                status.innerText = "Status: FAILED. See F12 Console.";
+                alert("Error detected! Check the browser console (F12).");
+            }
+        });
+    </script>
+</body>
+</html>
