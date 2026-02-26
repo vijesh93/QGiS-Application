@@ -31,7 +31,7 @@ def get_layers(
 @router.get("/{slug}", response_model=LayerRead)
 def get_layer_details(slug: str, session: Session = Depends(get_session)):
     """Fetch metadata for a single specific layer."""
-    layer = LayerService(session).repo.get_by_slug(slug)
+    layer = LayerService(session).get_by_slug(slug)
     if not layer:
         raise HTTPException(status_code=404, detail="Layer not found")
     return layer
