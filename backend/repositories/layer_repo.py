@@ -9,24 +9,40 @@ from typing import List
 class LayerRepository:
     def __init__(self, session: Session):
         self.session = session
+
+    def _get_base_select(self):
+        """Helper to ensure we always get GeoJSON and all metadata."""
+        return select(
+            Layer.id,
+            Layer.slug,
+            Layer.display_name,
+            Layer.category,
+            Layer.layer_type,
+            Layer.file_path,
+            # This is the magic: Database turns binary map data into a text string
+            func.ST_AsGeoJSON(Layer.bbox).label("extent")
+        )
     
     def get_categories(self):
         # Equivalent to SELECT category, count(*) GROUP BY category
         statement = select(Layer.category, func.count(Layer.id)).group_by(Layer.category)
         return self.session.exec(statement).all()
 
-    def get_by_category(self, category: str) -> List[Layer]:
-        statement = select(Layer).where(Layer.category == category).where(Layer.is_active == True)
+    def get_by_category(self, category: str) -> Layer:
+        # We select specific fields and transform the bbox on the fly
+        statement = self._get_base_select().where(
+            Layer.category == category, 
+            Layer.is_active == True
+        )
         return self.session.exec(statement).all()
-
-    def get_by_slug(self, slug: str) -> Layer:
-        statement = select(Layer).where(Layer.slug == slug)
+        
+    def get_by_slug(self, slug: str) -> Layer | None:
+        statement = self._get_base_select().where(Layer.slug == slug)
         return self.session.exec(statement).first()
 
     def get_by_display_name(self, name: str) -> Layer | None:
-        stmt = select(Layer).where(Layer.display_name == name)
-        return self.session.exec(stmt).first()
-
+        statement = self._get_base_select().where(Layer.display_name == name)
+        return self.session.exec(statement).first()
 
     """
     # Might have to add this in future, but needs db model modification

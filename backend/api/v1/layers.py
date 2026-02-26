@@ -1,14 +1,44 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import List, Optional
 from sqlmodel import Session, select
-from models.db_models.db_model import Layer as LayerModel
-from schemas.layer import LayerRead
 from db import get_session
+from services.layer_service import LayerService
+from models.db_models.db_model import Layer as LayerModel
+from schemas.layer import LayerRead, CategorySummary
+
+
+router = APIRouter(prefix="/layers", tags=["Layers"])
+
+
+@router.get("/categories", response_model=List[CategorySummary])
+def get_categories(session: Session = Depends(get_session)):
+    """Fetch all unique categories for the sidebar accordion."""
+    return LayerService(session).list_categories()
+
+
+@router.get("/", response_model=List[LayerRead])
+def get_layers(
+    category: str = Query(..., description="Filter layers by category"), 
+    session: Session = Depends(get_session)
+):
+    """Fetch layers within a specific category."""
+    layers = LayerService(session).get_category_layers(category)
+    if not layers:
+        raise HTTPException(status_code=404, detail="No layers found in this category")
+    return layers
+
+
+@router.get("/{slug}", response_model=LayerRead)
+def get_layer_details(slug: str, session: Session = Depends(get_session)):
+    """Fetch metadata for a single specific layer."""
+    layer = LayerService(session).get_by_slug(slug)
+    if not layer:
+        raise HTTPException(status_code=404, detail="Layer not found")
+    return layer
+
+
+"""
 from repositories.example_safe_querry import get_features_geojson
-
-router = APIRouter()
-
-
 @router.get("/layers", response_model=List[LayerRead])
 def list_layers(session: Session = Depends(get_session)):
     stmt = select(LayerModel)
@@ -52,7 +82,7 @@ def get_layer_features(
     # Use the safe feature query (table_name already validated)
     geojson = get_features_geojson(session, layer_name, bbox=bbox_tuple, limit=limit)
     return geojson
-
+"""
 
 # Modify based on the following code:
 """

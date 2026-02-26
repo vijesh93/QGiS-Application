@@ -1,0 +1,126 @@
+
+🛠️ GIS Backend: Scalable Architecture Reference
+1. Database Model (models/db_models/db_model.py)
+Maps Python to PostGIS via SQLModel.
+
+Python
+from sqlmodel import SQLModel, Field, Column
+from geoalchemy2 import Geometry
+from typing import Optional, Any
+from pydantic import ConfigDict
+
+class Layer(SQLModel, table=True):
+    __tablename__ = "layer_metadata"
+    
+    # Allow complex types (Geometry) during initialization
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    slug: str = Field(index=True, unique=True)
+    display_name: str
+    category: str = Field(index=True)
+    layer_type: str  # 'raster' or 'vector'
+    file_path: Optional[str] = None
+    is_active: bool = Field(default=True)
+    
+    # PostGIS Geometry column
+    bbox: Optional[Any] = Field(sa_column=Column(Geometry("POLYGON", srid=4326)))
+2. Pydantic Schemas (schemas/layer.py)
+Defines what the Frontend sees. Prevents crashes from unknown types.
+
+Python
+from pydantic import BaseModel, ConfigDict
+from typing import Optional, Any, List
+
+class LayerRead(BaseModel):
+    # Essential for Pydantic v2 + SQLModel compatibility
+    model_config = ConfigDict(
+        from_attributes=True,
+        arbitrary_types_allowed=True
+    )
+
+    id: int
+    slug: str
+    display_name: str
+    category: str
+    layer_type: str
+    file_path: Optional[str]
+    # 'extent' will hold the GeoJSON representation of the 'bbox'
+    extent: Optional[Any] = None
+
+class CategorySummary(BaseModel):
+    category: str
+    layer_count: int
+3. Repository Layer (repositories/layer_repo.py)
+Handles the SQL logic. Prevents SQL injection.
+
+Python
+from sqlmodel import Session, select, func
+from models.db_models.db_model import Layer
+
+class LayerRepository:
+    def __init__(self, session: Session):
+        self.session = session
+
+    def get_categories(self):
+        # Using func.count for efficient aggregation
+        statement = select(Layer.category, func.count(Layer.id)).group_by(Layer.category)
+        return self.session.exec(statement).all()
+
+    def get_by_category(self, category: str):
+        # Fetching spatial data as GeoJSON using ST_AsGeoJSON in the future if needed
+        statement = select(Layer).where(Layer.category == category).where(Layer.is_active == True)
+        return self.session.exec(statement).all()
+4. API Router (api/v1/layers.py)
+Organized with prefixes and dependency injection.
+
+Python
+from fastapi import APIRouter, Depends, HTTPException, Query
+from typing import List
+from sqlmodel import Session
+from db import get_session
+from services.layer_service import LayerService
+from schemas.layer import LayerRead, CategorySummary
+
+router = APIRouter(prefix="/layers", tags=["Layers"])
+
+@router.get("/categories", response_model=List[CategorySummary])
+def get_categories(session: Session = Depends(get_session)):
+    return LayerService(session).list_categories()
+
+@router.get("/", response_model=List[LayerRead])
+def get_layers(
+    category: str = Query(..., description="The category name"), 
+    session: Session = Depends(get_session)
+):
+    return LayerService(session).get_category_layers(category)
+5. Final main.py Structure
+The glue that connects the versions and middleware.
+
+Python
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from api.v1.layers import router as layers_v1
+
+app = FastAPI(title="BW-GIS API")
+
+# 1. Security (CORS)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# 2. Routing (Versioning)
+app.include_router(layers_v1, prefix="/api/v1")
+Key Standard Practices Applied:
+Arbitrary Types: Enabled in models to allow PostGIS Geometry objects.
+
+Versioning: API is nested under /api/v1/ to allow for a future /v2/ without breaking the app.
+
+Encapsulation: If you add a new table (e.g., Users), you simply create a new user_repo.py, user_service.py, and api/v1/users.py.
+
+Separation of Concerns: The DB model handles storage, the Schema handles communication, and the Repository handles the query.
+
+Would you like me to create a "Health Check" script for you now to verify that the Backend can successfully communicate with both the Database and the TiTiler server?
