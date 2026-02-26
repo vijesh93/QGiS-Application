@@ -12,6 +12,8 @@ from api.v1.layers import router as layers_router
 origins = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "http://localhost:5500",
+    "http://127.0.0.1:5500",
 ]
 
 @asynccontextmanager
@@ -31,6 +33,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
+    # allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],  # Allows GET, POST, etc.
     allow_headers=["*"],
