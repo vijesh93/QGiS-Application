@@ -31,7 +31,11 @@ import React from 'react';
 // We will use Lucide for icons (part of the packages installed)
 import { Layers, Settings2 } from 'lucide-react';
 
-const Sidebar = ({ transparency, setTransparency }) => {
+const Sidebar = ({ BaseMapTransparency, setBaseMapTransparency }) => {
+  /*
+  BaseMaptransparency={BaseMaptransparency} 
+  setBaseMapTransparency={setBaseMapTransparency} 
+  */
   return (
     <aside className="w-80 bg-slate-900 text-slate-100 h-screen flex flex-col shadow-xl z-10">
       {/* Header */}
@@ -50,24 +54,24 @@ const Sidebar = ({ transparency, setTransparency }) => {
           
           <div className="bg-slate-800 p-4 rounded-lg border border-slate-700">
             <label className="block text-sm font-medium mb-3">
-              Base Layer Transparency
+              Base Map Transparency
             </label>
             <input 
               type="range" 
               className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
               min="0" max="100" 
-              value={transparency} 
-              onChange={(e) => setTransparency(e.target.value)}
+              value={BaseMapTransparency} 
+              onChange={(e) => setBaseMapTransparency(e.target.value)}
             />
             <div className="flex justify-between text-xs text-slate-500 mt-2 font-mono">
               <span>0%</span>
-              <span>{transparency}%</span>
+              <span>{BaseMapTransparency}%</span>
               <span>100%</span>
             </div>
           </div>
         </div>
 
-        {/* Future placeholder for your 450 layers */}
+        {/* Future placeholder for rasters/layers */}
         <div className="opacity-50 border-t border-slate-800 pt-6">
           <p className="text-xs italic text-slate-500 text-center">
             Layer list initialization...

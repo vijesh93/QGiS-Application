@@ -2,7 +2,16 @@ import React, { useEffect, useRef } from 'react';
 import maplibregl from 'maplibre-gl';
 
 
-const MapView = ({ transparency }) => {
+const MapView = ({ BaseMapTransparency, activeLayersList, opacities }) => {
+  /*
+        oöd: 
+        MapView transparency={transparency}
+
+        New:
+        BaseMaptransparency={BaseMaptransparency}
+        activeLayersList={activeLayersList}
+        opacities={opacities}
+  */
   const mapContainer = useRef(null);
   const mapRef = useRef(null);
 
@@ -22,12 +31,12 @@ const MapView = ({ transparency }) => {
     return () => mapRef.current.remove();
   }, []);
 
-  // Use another useEffect to react to transparency changes without reloading the whole map
+  // Use another useEffect to react to BaseMapTransparency changes without reloading the whole map
   useEffect(() => {
     if (mapRef.current && mapRef.current.getLayer('osm-layer')) {
-      mapRef.current.setPaintProperty('osm-layer', 'raster-opacity', transparency / 100);
+      mapRef.current.setPaintProperty('osm-layer', 'raster-opacity', BaseMapTransparency / 100);
     }
-  }, [transparency]);
+  }, [BaseMapTransparency]);
 
   return <div ref={mapContainer} style={{ flex: 1 }} />;
 };
