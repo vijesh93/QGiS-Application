@@ -4,7 +4,7 @@ from sqlmodel import Session, select
 from db import get_session
 from services.layer_service import LayerService
 from models.db_models.db_model import Layer as LayerModel
-from schemas.layer import LayerRead, CategorySummary
+from schemas.layer import LayerRead, CategorySummary, RasterCount
 
 
 router = APIRouter(prefix="/layers", tags=["Layers"])
@@ -15,6 +15,10 @@ def get_categories(session: Session = Depends(get_session)):
     """Fetch all unique categories for the sidebar accordion."""
     return LayerService(session).list_categories()
 
+@router.get("/rasters/count", response_model=RasterCount)
+def get_raster_count(session: Session = Depends(get_session)):
+    """Fetch total number of rasters in the database and return as json file"""
+    return LayerService(session).get_raster_count()
 
 @router.get("/", response_model=List[LayerRead])
 def get_layers(
