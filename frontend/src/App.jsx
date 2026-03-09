@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import Sidebar from './components/Sidebar';
 import MapView from './features/map/MapView';
-import { useLayers } from './features/map/hooks/useLayers'; // frontend\src\features\map\hooks\useLayers.js
+import ActiveLayersLegend from './components/ActiveLayersLegend';
+import { useLayers } from './features/map/hooks/useLayers';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
-
 function App() {
-  const [BaseMaptransparency, setBaseMapTransparency] = useState(100);
-    const {
+  const [BaseMapTransparency, setBaseMapTransparency] = useState(100);
+
+  const {
     allLayers,
     activeLayers,
     opacities,
@@ -27,20 +28,39 @@ function App() {
   } = useLayers();
 
   return (
-    /*
-      <Sidebar transparency={transparency} setTransparency={setTransparency} />      
-      <MapView transparency={transparency} />
-    */
     <div style={{ width: '100vw', height: '100vh', display: 'flex' }}>
-      <Sidebar 
-        BaseMapTransparency={BaseMaptransparency} 
-        setBaseMapTransparency={setBaseMapTransparency} 
-      />
-      <MapView 
-        BaseMapTransparency={BaseMaptransparency}
-        activeLayersList={activeLayersList}
+      <Sidebar
+        BaseMapTransparency={BaseMapTransparency}
+        setBaseMapTransparency={setBaseMapTransparency}
+        groupedLayers={groupedLayers}
+        activeLayers={activeLayers}
         opacities={opacities}
+        loading={loading}
+        error={error}
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
+        rasterCount={rasterCount}
+        expandedCategories={expandedCategories}
+        activeCount={activeCount}
+        toggleLayer={toggleLayer}
+        setLayerOpacity={setLayerOpacity}
+        toggleCategory={toggleCategory}
+        clearAllLayers={clearAllLayers}
       />
+      <div style={{ flex: 1, position: 'relative', height: '100%' }}>
+        <MapView
+          BaseMapTransparency={BaseMapTransparency}
+          activeLayersList={activeLayersList}
+          opacities={opacities}
+        />
+        <ActiveLayersLegend
+          activeLayersList={activeLayersList}
+          opacities={opacities}
+          setLayerOpacity={setLayerOpacity}
+          toggleLayer={toggleLayer}
+          allLayers={allLayers}
+        />
+      </div>
     </div>
   );
 }
