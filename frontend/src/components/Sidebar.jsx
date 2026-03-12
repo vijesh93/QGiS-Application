@@ -58,62 +58,56 @@ const Sidebar = ({
           </div>
         )}
       </div>
-
-      {/* ── Scrollable content ─────────────────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto flex flex-col">
-
-        {/* ── Base Map Controls (your existing slider) ───────────────────── */}
-        <div className="p-5 border-b border-slate-800">
-          <div className="flex items-center gap-2 mb-3 text-slate-400">
-            <Settings2 size={15} />
-            <span className="text-xs font-semibold uppercase tracking-wider">Map Controls</span>
-          </div>
-          <div className="bg-slate-800 p-4 rounded-lg border border-slate-700">
-            <label className="block text-sm font-medium mb-3">
-              Base Map Transparency
-            </label>
-            <input
-              type="range"
-              className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
-              min="0" max="100"
-              value={BaseMapTransparency}
-              onChange={(e) => setBaseMapTransparency(Number(e.target.value))}
-            />
-            <div className="flex justify-between text-xs text-slate-500 mt-2 font-mono">
-              <span>0%</span>
-              <span>{BaseMapTransparency}%</span>
-              <span>100%</span>
-            </div>
+      
+      {/* ── Base Map Controls (your existing slider) ───────────────────── */}
+      <div className="p-5 border-b border-slate-800">
+        <div className="flex items-center gap-2 mb-3 text-slate-400">
+          <Settings2 size={15} />
+          <span className="text-xs font-semibold uppercase tracking-wider">Map Controls</span>
+        </div>
+        <div className="bg-slate-800 p-4 rounded-lg border border-slate-700">
+          <label className="block text-sm font-medium mb-3">
+            Base Map Transparency
+          </label>
+          <input
+            type="range"
+            className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+            min="0" max="100"
+            value={BaseMapTransparency}
+            onChange={(e) => setBaseMapTransparency(Number(e.target.value))}
+          />
+          <div className="flex justify-between text-xs text-slate-500 mt-2 font-mono">
+            <span>0%</span>
+            <span>{BaseMapTransparency}%</span>
+            <span>100%</span>
           </div>
         </div>
-
-        {/* ── Layer Browser ──────────────────────────────────────────────── */}
-        <div className="flex flex-col flex-1">
-
-          {/* Search bar */}
-          <div className="px-4 py-3 border-b border-slate-800">
-            <div className="flex items-center gap-2 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500/20">
-              <Search size={13} className="text-slate-500 flex-shrink-0" />
-              <input
-                type="text"
-                placeholder="Search layers…"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="flex-1 bg-transparent border-none outline-none text-sm text-slate-200 placeholder-slate-500"
-              />
-              {searchQuery && (
-                <button
-                  onClick={() => setSearchQuery('')}
-                  className="text-slate-500 hover:text-slate-300 text-base leading-none"
-                >
-                  <X size={14} />
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Active layers summary bar */}
-          {activeCount > 0 && (
+      </div>
+      
+      {/* Search bar */}
+      <div className="px-4 py-3 border-b border-slate-800">
+        <div className="flex items-center gap-2 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500/20">
+          <Search size={13} className="text-slate-500 flex-shrink-0" />
+          <input
+            type="text"
+            placeholder="Search layers…"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="flex-1 bg-transparent border-none outline-none text-sm text-slate-200 placeholder-slate-500"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="text-slate-500 hover:text-slate-300 text-base leading-none"
+            >
+              <X size={14} />
+            </button>
+          )}
+        </div>
+      </div>
+      <div>
+        {/* Active layers summary bar */}
+          {activeCount > -1 && (
             <div className="flex items-center gap-2 px-4 py-2 bg-blue-950/40 border-b border-slate-800">
               {/* Animated pulse dot */}
               <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse flex-shrink-0" />
@@ -128,7 +122,15 @@ const Sidebar = ({
               </button>
             </div>
           )}
+      </div>
 
+      {/* ── Scrollable content ─────────────────────────────────────────────── */}
+      <div className="flex-1 overflow-y-auto flex flex-col">
+
+        {/* ── Layer Browser ──────────────────────────────────────────────── */}
+        <div className="flex flex-col flex-1">
+
+          {/* Active layers summary bar */}
           {/* Loading state */}
           {loading && (
             <div className="flex items-center gap-3 px-4 py-6 text-slate-500 text-sm">
