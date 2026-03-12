@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from api.v1.layers import router as layers_router
 
 
-# Define allowed origins (your Frontend URL)
+# Define allowed origins (Frontend URL)
 origins = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
