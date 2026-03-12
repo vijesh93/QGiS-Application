@@ -4,7 +4,9 @@ from urllib.parse import urlparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Create a directory to store downloads
-download_dir = "SRTM_1KM_data"
+script_dir = os.path.dirname(os.path.abspath(__file__))          # data/data_downloader/
+data_dir   = os.path.dirname(script_dir)                          # data/
+download_dir = os.path.join(data_dir, "data_files", "Raster")    # data/data_files/Raster/
 os.makedirs(download_dir, exist_ok=True)
 
 # List of 1KM resolution files from the document
