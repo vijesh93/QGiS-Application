@@ -1,1 +1,37 @@
 @import "tailwindcss";
+
+/* ── Themed scrollbars ───────────────────────────────────────────────────────
+   Firefox uses scrollbar-width + scrollbar-color (2 values: thumb track).
+   Chrome/Edge/Safari use the ::-webkit-scrollbar pseudo-elements.
+   Both are applied globally so sidebar, legend, and any future scrollable
+   panel automatically gets the dark theme without extra class names.
+────────────────────────────────────────────────────────────────────────────── */
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #1f3a52 transparent;
+}
+
+/* Chrome / Edge / Safari */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1f3a52;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #2a5070;
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}

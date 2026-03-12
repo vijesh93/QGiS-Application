@@ -43,6 +43,16 @@ class LayerRepository:
     def get_by_display_name(self, name: str) -> Layer | None:
         statement = self._get_base_select().where(Layer.display_name == name)
         return self.session.exec(statement).first()
+    
+    def get_raster_count(self) -> int:
+        # TODO: Implement SQL for layer count 
+        statement = select(func.count(Layer.id)).where(
+            Layer.layer_type == "raster",
+            Layer.is_active == True
+        )
+        # .one() returns the first result or crashes if empty
+        # For a count query, it will always return at least 0
+        return self.session.exec(statement).one()
 
     """
     # Might have to add this in future, but needs db model modification

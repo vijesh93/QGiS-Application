@@ -40,6 +40,8 @@ services:
       HTTP_PROXY: ${HTTP_PROXY}
       HTTPS_PROXY: ${HTTPS_PROXY}
       NO_PROXY: ${NO_PROXY}
+    networks:
+      - gis-network 
   
   data-loader:
     build:
@@ -67,3 +69,8 @@ services:
     networks:
       - gis-network
     tty: true
+
+networks:
+  gis-network:
+    external: true
+    name: qgis_layer_service_gis-network

@@ -6,7 +6,7 @@ This script implements the layer related business logic, i.e., the python contro
 
 from sqlmodel import Session 
 from repositories.layer_repo import LayerRepository
-from schemas.layer import CategorySummary, LayerRead
+from schemas.layer import CategorySummary, LayerRead, RasterCount
 from typing import List, Optional
 
 
@@ -29,6 +29,11 @@ class LayerService:
         # Results are rows from our '_get_base_select'
         # LayerRead.model_validate will handle the conversion automatically
         return [LayerRead.model_validate(r) for r in results]
+    
+    def get_raster_count(self) -> RasterCount:
+        result = self.repo.get_raster_count()
+        # Making sure that result is integer before sending
+        return RasterCount(total_rasters=result)
 
     def get_by_slug(self, slug: str) -> Optional[LayerRead]:
         result = self.repo.get_by_slug(slug)    # Single element and not a list

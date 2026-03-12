@@ -37,3 +37,7 @@ class LayerRead(BaseModel):
 class CategorySummary(BaseModel):
     category: str
     layer_count: int
+
+
+class RasterCount(BaseModel):
+    total_rasters: int

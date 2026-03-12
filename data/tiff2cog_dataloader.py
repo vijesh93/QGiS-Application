@@ -20,6 +20,7 @@ def register_layer(file_path: Path):
         # If TiTiler maps ./data to /data, the path is:
         internal_path = f"/data/data_files/Optimized_Raster/{file_path.name}"
 
+        # Modify the querry here also if in future, another layer type is to be integrated (non-ruster)
         query = text("""
             INSERT INTO layer_metadata 
             (name, display_name, category, file_path, geometry_type, srid, 
