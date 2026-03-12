@@ -7,7 +7,9 @@ from pathlib import Path
 
 
 # Database connection
-DB_URL = os.getenv("DATABASE_URL", "postgresql://user:pass@db:5432/geoportal")
+DB_URL = os.getenv("DATABASE_URL")
+if not DB_URL:
+    raise ValueError("DATABASE_URL environment variable is not set")
 engine = create_engine(DB_URL)
 
 

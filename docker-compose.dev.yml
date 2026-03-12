@@ -40,6 +40,8 @@ services:
       HTTP_PROXY: ${HTTP_PROXY}
       HTTPS_PROXY: ${HTTPS_PROXY}
       NO_PROXY: ${NO_PROXY}
+      VITE_TITILER_URL: ${VITE_TITILER_URL}
+      VITE_API_URL: ${VITE_API_URL}
     networks:
       - gis-network 
   

@@ -3,7 +3,8 @@ data_files/
 postgres_data/
 
 # Environment secrets
-.env
+.env*
+!.env.example
 
 # Python
 __pycache__/

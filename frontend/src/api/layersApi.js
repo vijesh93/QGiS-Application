@@ -3,9 +3,9 @@
 const BASE_URL = import.meta.env.VITE_API_URL || '/api/v1';
 
 // TiTiler URL — browser calls this directly (not via Vite proxy).
-// In dev: set VITE_TITILER_URL=http://localhost:8080 in your .env file.
-// In prod: set VITE_TITILER_URL to your public TiTiler URL.
-const TITILER_URL = import.meta.env.VITE_TITILER_URL || 'http://localhost:8080';
+// In dev: set VITE_TITILER_URL in .env file.
+// In prod: set VITE_TITILER_URL to public TiTiler URL.
+const TITILER_URL = import.meta.env.VITE_TITILER_URL;
 
 // ─── Normalise layer shape ───────────────────────────────────────────────────
 function normaliseLayer(raw) {
@@ -53,7 +53,7 @@ export async function fetchRasterInventory() {
 // This avoids any proxy encoding issues entirely.
 //
 // Final URL example:
-//   http://localhost:8080/cog/tiles/WebMercatorQuad/{z}/{x}/{y}.png
+//   http://localhost:{TITILER_PORT}/cog/tiles/WebMercatorQuad/{z}/{x}/{y}.png
 //     ?url=/data/data_files/Optimized_Raster/aspectcosine_1KMma_SRTM.tif
 //     &rescale=-1,1
 //     &colormap_name=viridis
