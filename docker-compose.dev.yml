@@ -13,6 +13,7 @@ services:
       - /app/.venv
     ports:
       - "${BACKEND_HOST_PORT}:8000"
+    container_name: qgis-raster-app-geoportal-backend
     environment:
       DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD_URL}@db:5432/geoportal
       HTTP_PROXY: ${HTTP_PROXY}
@@ -36,6 +37,7 @@ services:
       - /app/node_modules
     ports:
       - "${FRONTEND_HOST_PORT}:5173"
+    container_name: geoportal-frontend
     environment:
       HTTP_PROXY: ${HTTP_PROXY}
       HTTPS_PROXY: ${HTTPS_PROXY}
@@ -52,10 +54,10 @@ services:
         HTTP_PROXY: ${HTTP_PROXY}
         HTTPS_PROXY: ${HTTPS_PROXY}
         NO_PROXY: ${NO_PROXY}
-    container_name: geospatial-data-loader
     volumes:
       - ./data:/app
       - ./backend:/backend_src # Optional: to share models
+    container_name: geoportal-data-loader
     environment:
       DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD_URL}@db:5432/geoportal
       HTTP_PROXY: ${HTTP_PROXY}

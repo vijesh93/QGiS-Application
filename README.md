@@ -11,11 +11,12 @@ A high-performance, containerized Web GIS application for visualizing and managi
 - **Redis tile caching** — tiles cached for 24 hours for fast repeat loads
 - **FastAPI** backend serving layer metadata from PostGIS
 - Layer sidebar with **search, category grouping, and opacity controls**
-- Active layers legend with per-layer opacity sliders
+- Active layers legend with per-layer opacity sliders and remove buttons
 - Base map transparency control
 - Vector tile support via **pg_tileserv** (for future vector layers)
 - Fully containerized with **Docker Compose** — one command to start everything
 - Hot-reload development workflow with bind-mounts
+- **One-command data pipeline** — download, optimize, and register all layers automatically
 
 ---
 
@@ -60,12 +61,13 @@ A high-performance, containerized Web GIS application for visualizing and managi
 │   │   └── styles/index.css
 │   └── vite.config.js              # Vite + proxy config
 │
-├── data/                           # Data pipeline scripts
+├── data/                           # Data pipeline
 │   ├── data_downloader/
 │   │   └── dowloader.py            # Downloads raw TIFFs from PANGAEA
 │   ├── data_files/
-│   │   ├── Raster/                 # Raw downloaded TIFFs (gitignored)
-│   │   └── Optimized_Raster/       # COG-optimized TIFFs (gitignored)
+│   │   ├── Raster/                 # Raw downloaded TIFFs      (gitignored)
+│   │   └── Optimized_Raster/       # COG-optimized TIFFs       (gitignored)
+│   ├── setup_layers.py             # ⭐ One-command pipeline orchestrator
 │   ├── cog_optimizer.py            # Converts Raster/ → Optimized_Raster/
 │   ├── check_if_cog.py             # Validates COG compliance via TiTiler
 │   └── register_layers.py          # Feeds layer metadata into PostGIS
@@ -82,10 +84,10 @@ A high-performance, containerized Web GIS application for visualizing and managi
 
 ## ⚙️ Prerequisites
 
-- **Docker Desktop** with WSL2 backend (Windows) or Docker Engine (Linux)
-- **WSL2** recommended on Windows for filesystem performance
-- **Python 3.11+** — only needed if running data pipeline scripts on the host (optional; scripts also run inside the container)
-- **GDAL** — only needed on host if running optimizer outside Docker (`gdal-bin` is installed inside the container automatically)
+- **Docker Engine** (Linux) or **Docker Desktop** with WSL2 backend (Windows)
+- **WSL2** strongly recommended on Windows for filesystem performance
+
+> No local Python or GDAL installation needed — everything runs inside the containers.
 
 ---
 
@@ -100,16 +102,14 @@ cd QGiS-Application
 
 ### 2. Create your `.env` file
 
-Copy the example and fill in your values:
-
 ```bash
 cp .env.example .env
 ```
 
-Then edit `.env`:
+Then edit `.env` with your values:
 
 ```env
-# Proxy (leave empty if not behind a corporate proxy)
+# Proxy — leave empty if not behind a corporate proxy
 HTTP_PROXY=
 HTTPS_PROXY=
 NO_PROXY=
@@ -117,22 +117,22 @@ NO_PROXY=
 # Database
 DB_USER=geoportal_user
 DB_PASSWORD=your_secure_password
-DB_PASSWORD_URL=your_secure_password   # URL-encoded if password has special chars
+DB_PASSWORD_URL=your_secure_password
 POSTGRES_DB=geoportal
 
-# Host ports (what gets exposed on your machine)
+# Host ports — what gets exposed on your machine
 DB_HOST_PORT=5432
 BACKEND_HOST_PORT=8000
 FRONTEND_HOST_PORT=3000
 TITILER_HOST_PORT=8080
 TILESERV_HOST_PORT=7800
 
-# Frontend (points browser at TiTiler on host)
+# Frontend
 VITE_TITILER_URL=http://localhost:8080
 VITE_API_URL=/api/v1
 ```
 
-> **Note on `DB_PASSWORD_URL`:** If your password contains special characters (e.g. `@`, `#`, `/`), `DB_PASSWORD_URL` must be the URL-percent-encoded version. For a plain alphanumeric password they are identical.
+> **`DB_PASSWORD_URL`** must be the URL-percent-encoded version of your password if it contains special characters (`@`, `#`, `/` etc.). For plain alphanumeric passwords they are identical.
 
 ### 3. Start the stack
 
@@ -142,13 +142,17 @@ VITE_API_URL=/api/v1
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
 ```
 
-**Production** (optimized builds):
+**Production** (optimized builds, detached):
 
 ```bash
 docker compose -f docker-compose.yml up --build -d
 ```
 
 ### 4. Verify services are running
+
+```bash
+docker compose ps
+```
 
 | Service | URL |
 |---|---|
@@ -157,22 +161,22 @@ docker compose -f docker-compose.yml up --build -d
 | **TiTiler** | http://localhost:8080/docs |
 | **pg_tileserv** | http://localhost:7800 |
 
-At this point the app loads but the map will show **no layers** — you need to run the data pipeline first (see below).
+The app loads at this point but the map shows **no layers** — run the data pipeline next.
 
 ---
 
-## 🗂️ Data Pipeline — Adding Raster Layers
+## 🗂️ Data Pipeline
 
-The pipeline has three steps: **Download → Optimize → Register**. Scripts work both on the host machine and inside the Docker container.
+The pipeline downloads SRTM-derived rasters from PANGAEA, converts them to Cloud Optimized GeoTIFF format, and registers their metadata in PostGIS. The frontend then shows them automatically.
 
 ```
 PANGAEA data source
        │
        ▼
-[1] dowloader.py ──────► data/data_files/Raster/          (raw GeoTIFFs)
+[1] dowloader.py ──────► data_files/Raster/            (raw GeoTIFFs)
        │
        ▼
-[2] cog_optimizer.py ──► data/data_files/Optimized_Raster/ (COG GeoTIFFs)
+[2] cog_optimizer.py ──► data_files/Optimized_Raster/  (COG GeoTIFFs)
        │
        ▼
 [3] register_layers.py ► PostGIS layer_metadata table
@@ -181,125 +185,85 @@ PANGAEA data source
   Frontend map shows layers 🗺️
 ```
 
----
+### One-command pipeline (recommended)
 
-### Step 1 — Download raw rasters
-
-The downloader fetches 1 km resolution SRTM-derived rasters (aspect, slope, elevation, roughness, TPI, TRI, VRM) from the PANGAEA data repository.
-
-**Run inside the container** (recommended — no local Python setup needed):
+`setup_layers.py` orchestrates all steps automatically. Run it inside the container — no local Python or GDAL needed:
 
 ```bash
-docker exec -it geospatial-data-loader python data_downloader/dowloader.py
+docker exec -it geoportal-data-loader python setup_layers.py
 ```
 
-**Or run on the host** (requires `pip install requests`):
+That's it. The script prints coloured progress for each step and shows the app URL when done.
+
+### Pipeline flags
+
+Skip steps you've already completed:
 
 ```bash
-cd data
-python data_downloader/dowloader.py
+# Files already downloaded? Skip to optimization
+docker exec -it geoportal-data-loader python setup_layers.py --skip-download
+
+# COGs already exist? Skip straight to registration
+docker exec -it geoportal-data-loader python setup_layers.py --skip-download --skip-optimize
+
+# Only re-register metadata (e.g. after changing category rules)
+docker exec -it geoportal-data-loader python setup_layers.py --only-register
+
+# Skip TiTiler validation (faster, useful in dev)
+docker exec -it geoportal-data-loader python setup_layers.py --skip-validate
 ```
 
-Files are saved to `data/data_files/Raster/`. Already-downloaded files are skipped automatically.
+### Running individual scripts
 
----
-
-### Step 2 — Optimize to Cloud Optimized GeoTIFF (COG)
-
-Raw GeoTIFFs must be converted to COG format before TiTiler can stream them efficiently as map tiles. This step:
-
-- Converts each `.tif` in `Raster/` using `gdal_translate -of COG`
-- Writes the result to `Optimized_Raster/`
-- Skips files that are already optimized
-- Validates each output file against TiTiler's `/cog/validate` endpoint
-
-**Run inside the container** (recommended — GDAL is pre-installed):
+Each script can also be run independently:
 
 ```bash
-docker exec -it geospatial-data-loader python cog_optimizer.py
+docker exec -it geoportal-data-loader python data_downloader/dowloader.py
+docker exec -it geoportal-data-loader python cog_optimizer.py
+docker exec -it geoportal-data-loader python check_if_cog.py
+docker exec -it geoportal-data-loader python register_layers.py
 ```
 
-**Or run on the host** (requires GDAL and `pip install requests`):
-
-```bash
-cd data
-python cog_optimizer.py
-```
-
-> **Why COG?** A Cloud Optimized GeoTIFF stores internal tile pyramids (overviews) that allow TiTiler to read only the pixels needed for the current zoom level, without loading the entire file. This is what makes raster tile streaming fast.
-
-You can also run the validator separately at any time to check the `Optimized_Raster/` folder:
-
-```bash
-docker exec -it geospatial-data-loader python check_if_cog.py
-```
+> All scripts use `__file__`-based path resolution and work both inside the container and directly on the host (Windows / Linux / macOS) without modification.
 
 ---
 
-### Step 3 — Register layers in the database
-
-This script reads each `.tif` from `Optimized_Raster/`, extracts spatial metadata (bounding box, zoom levels) via TiTiler, and inserts or updates a row in the `layer_metadata` table in PostGIS.
-
-> **Important:** The stack must be running before this step so the script can reach TiTiler and PostgreSQL.
-
-**Run inside the container:**
-
-```bash
-docker exec -it geospatial-data-loader python register_layers.py
-```
-
-**Or run on the host** (requires `pip install psycopg2-binary requests` and `DATABASE_URL` set):
-
-```bash
-cd data
-DATABASE_URL=postgresql://geoportal_user:your_password@localhost:5432/geoportal \
-python register_layers.py
-```
-
-After this step, **reload the frontend** at http://localhost:3000 — all registered layers will appear in the sidebar and can be toggled onto the map.
-
----
-
-## 🔄 Full Workflow (copy-paste)
+## 🔄 Complete First-Run Workflow
 
 ```bash
 # 1. Start the stack
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build -d
 
-# 2. Wait for all containers to be healthy
+# 2. Confirm all containers are healthy
 docker compose ps
 
-# 3. Download raw rasters (~50 files, several GB — takes a while)
-docker exec -it geospatial-data-loader python data_downloader/dowloader.py
+# 3. Run the full data pipeline (~50 files, several GB — takes a while)
+docker exec -it geoportal-data-loader python setup_layers.py
 
-# 4. Convert to COG
-docker exec -it geospatial-data-loader python cog_optimizer.py
-
-# 5. Register in database
-docker exec -it geospatial-data-loader python register_layers.py
-
-# 6. Open the app
-# http://localhost:3000
+# 4. Open the app
+# → http://localhost:3000
 ```
+
+After step 3 completes, reload the browser — all registered layers appear in the sidebar.
 
 ---
 
 ## 🛑 Stopping the Stack
 
 ```bash
-# Stop containers but keep volumes (DB data preserved)
+# Stop but keep data (DB and Redis volumes preserved)
 docker compose -f docker-compose.yml -f docker-compose.dev.yml down
 
-# Stop AND wipe all data (DB, Redis cache) — destructive!
+# Stop AND wipe all data — destructive, resets the DB
 docker compose -f docker-compose.yml -f docker-compose.dev.yml down -v
 ```
 
 ---
 
-## 🔧 Common Commands
+## 🔧 Useful Commands
 
 ```bash
-# Follow all logs
+# Follow logs for all services
 docker compose -f docker-compose.yml -f docker-compose.dev.yml logs -f
 
 # Follow logs for a specific service
@@ -310,94 +274,99 @@ docker compose logs -f raster-server
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build frontend
 
 # Open a shell in the data container
-docker exec -it geospatial-data-loader bash
+docker exec -it geoportal-data-loader bash
 
 # Open a PostgreSQL shell
-docker exec -it qgis_layer_service-db-1 psql -U geoportal_user -d geoportal
+docker exec -it geoportal-db psql -U geoportal_user -d geoportal
 
 # Check registered layers
-docker exec -it qgis_layer_service-db-1 psql -U geoportal_user -d geoportal \
-  -c "SELECT slug, category, layer_type FROM layer_metadata ORDER BY slug;"
+docker exec -it geoportal-db psql -U geoportal_user -d geoportal \
+  -c "SELECT slug, display_name, category FROM layer_metadata ORDER BY slug;"
 
-# Manually validate a COG via TiTiler
+# Manually validate a single COG via TiTiler
 curl "http://localhost:8080/cog/validate?url=/data/data_files/Optimized_Raster/aspectcosine_1KMma_SRTM.tif"
 ```
 
 ---
 
-## 🌐 How Raster Tiles Work (Architecture)
+## 🌐 How Raster Tiles Work
 
 ```
 Browser
   │
-  │  GET /titiler/cog/tiles/WebMercatorQuad/{z}/{x}/{y}.png
+  │  GET http://localhost:8080/cog/tiles/WebMercatorQuad/{z}/{x}/{y}.png
   │        ?url=/data/data_files/Optimized_Raster/aspectcosine_1KMma_SRTM.tif
   │        &rescale=-1,1&colormap_name=viridis
   │
   ▼
-Vite dev proxy  (localhost:3000 → raster-server:80)
-  │
-  ▼
 TiTiler container
-  │  reads COG file from mounted volume
-  │  checks Redis cache first
+  │  reads COG tile from mounted volume (./data → /data)
+  │  checks Redis cache first (24h TTL)
   ▼
-Redis (tile cache, 24h TTL)
+Redis
   │
   ▼
-PNG tile returned to browser → MapLibre renders it on the map
+PNG tile → MapLibre renders on map
 ```
 
-The browser always calls TiTiler via the Vite proxy in development, which forwards requests from `/titiler/...` to `http://raster-server:80/...` inside the Docker network.
+The browser calls TiTiler directly on `VITE_TITILER_URL` (default `http://localhost:8080`). The Vite dev proxy (`/titiler/...` → `http://raster-server:80`) is available as a fallback but direct calls are used in practice to avoid proxy encoding issues.
 
 ---
 
 ## 🗄️ Database Schema
 
-The core table is `layer_metadata` in PostGIS:
+Core table: `layer_metadata`
 
 | Column | Type | Description |
 |---|---|---|
 | `id` | serial | Primary key |
-| `slug` | text | Unique identifier (filename stem) |
-| `display_name` | text | Human-readable name shown in UI |
-| `category` | text | Sidebar category (e.g. `Environment`) |
-| `layer_type` | text | `raster` or `vector` |
+| `slug` | varchar | Unique identifier (filename stem) |
+| `display_name` | varchar | Human-readable name shown in UI |
+| `category` | varchar | Sidebar category (e.g. `Terrain`) |
+| `layer_type` | varchar | `raster` or `vector` |
 | `file_path` | text | Path as seen by raster-server container |
 | `bbox` | geometry | WGS84 bounding box (PostGIS POLYGON) |
-| `min_zoom` | int | Minimum map zoom level |
-| `max_zoom` | int | Maximum map zoom level |
-| `is_active` | bool | Whether layer appears in the UI |
-| `created_at` | timestamptz | Registration timestamp |
+| `min_zoom` | integer | Minimum map zoom level |
+| `max_zoom` | integer | Maximum map zoom level |
+| `is_active` | boolean | Whether layer appears in the UI |
+| `created_at` | timestamp | Registration timestamp |
 
 ---
 
 ## 🐛 Troubleshooting
 
-**Frontend shows no layers after registration**
-- Check the backend is healthy: `docker compose logs backend`
-- Verify rows exist: `SELECT count(*) FROM layer_metadata;`
+**Frontend shows no layers after running the pipeline**
+- Check backend is healthy: `docker compose logs backend`
+- Verify rows exist: `docker exec -it geoportal-db psql -U geoportal_user -d geoportal -c "SELECT count(*) FROM layer_metadata;"`
 - Hard refresh the browser: `Ctrl + Shift + R`
 
-**Tiles show as grey / 500 errors in Network tab**
-- Confirm TiTiler can access the file: `curl "http://localhost:8080/cog/info?url=/data/data_files/Optimized_Raster/<filename>.tif"`
-- Check TiTiler logs: `docker compose logs raster-server`
-- Verify the file is a valid COG: `docker exec -it geospatial-data-loader python check_if_cog.py`
+**`setup_layers.py` fails with `DATABASE_URL is not set`**
+- The full stack must be running before the pipeline
+- Check env vars: `docker exec geoportal-data-loader env | grep DATABASE`
 
-**`register_layers.py` fails with connection error**
-- The full stack must be running before registering layers
-- Check `DATABASE_URL` is set: `docker exec geospatial-data-loader env | grep DATABASE`
+**Tiles show grey / 500 errors in the Network tab**
+- Confirm TiTiler can read the file: `curl "http://localhost:8080/cog/info?url=/data/data_files/Optimized_Raster/<file>.tif"`
+- Check TiTiler logs: `docker compose logs raster-server`
+- Re-run COG validation: `docker exec -it geoportal-data-loader python check_if_cog.py`
 
 **Slow tile loading on first request**
-- Expected — TiTiler reads and caches on first access. Subsequent requests for the same tile are served from Redis and are fast.
+- Expected — TiTiler reads and caches on first access. Repeat requests hit Redis and are instant.
 
-**Windows: bind-mount permission errors**
+**`network gis-network declared as external, but could not be found`**
+- Always run both compose files together: `-f docker-compose.yml -f docker-compose.dev.yml`
+- Never use `external: true` with a hardcoded `name:` — it breaks on machines with a different project folder name
+- The `networks:` section in `docker-compose.dev.yml` should only contain `gis-network:` with no other properties
+
+**Docker installed via snap (Linux) — containers won't stop or permission denied**
+- This is a known snap Docker limitation. Uninstall it and install the official Engine:
+```bash
+sudo snap remove docker
+# Then follow: https://docs.docker.com/engine/install/ubuntu/
+```
+
+**Windows: bind-mount permission or performance issues**
 - Ensure Docker Desktop has file sharing enabled for your project drive
-- Or move the project inside your WSL2 filesystem (`/home/<user>/...`) for best performance
-
-**Container can't resolve `raster-server` hostname**
-- All services must be on the same Docker network (`gis-network`)
-- Check: `docker inspect <container-name> | grep -A 10 Networks`
+- For best performance move the project inside the WSL2 filesystem (`~/...`)
 
 ---
 
@@ -406,16 +375,8 @@ The core table is `layer_metadata` in PostGIS:
 - Phase 2: JWT-based authentication for private layers
 - Phase 3: `pgvector` integration for semantic search of layer metadata
 - Phase 4: GenAI "Map Assistant" — natural language queries over the layer catalogue
-- Phase 5: Vector layer support via pg_tileserv (administrative boundaries, nature reserves)
-
----
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Run tests and linting locally
-4. Open a pull request with a clear description
+- Phase 5: Subcategory support in sidebar (schema + API + frontend grouping)
+- Phase 6: Vector layer support via pg_tileserv (administrative boundaries, nature reserves)
 
 ---
 

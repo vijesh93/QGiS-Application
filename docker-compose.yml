@@ -1,6 +1,7 @@
 services:
   db:
     image: postgis/postgis:15-3.3
+    container_name: geoportal-db
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d geoportal"]
       interval: 5s
@@ -21,6 +22,7 @@ services:
 # tileserv: Ideal for vectors (Strems winds etc)
   tileserver: # TODO: IMPORTANT: Check: Probably need to replace/extend this with pg_titiler 
     image: pramsey/pg_tileserv:latest # Or neteler/postgis-t-rex # Or crunchydata/pg_tileserv
+    container_name: geoportal-tileserver
     environment:
       DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD_URL}@db:5432/geoportal
       HTTP_PROXY: ${HTTP_PROXY}
@@ -38,6 +40,7 @@ services:
   # The "Brain" for caching
   redis:
     image: redis:7-alpine
+    container_name: geoportal-redis
     networks:
       - gis-network
     # Persist cache even if container restarts
@@ -54,6 +57,7 @@ services:
   # Tttiler: Ideal for image and various hirarchies of image
   raster-server:
     image: ghcr.io/developmentseed/titiler:latest
+    container_name: geoportal-titiler
     environment:
       DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD_URL}@db:5432/geoportal
       HTTP_PROXY: ${HTTP_PROXY}
@@ -78,6 +82,7 @@ services:
         HTTP_PROXY: ${HTTP_PROXY}
         HTTPS_PROXY: ${HTTPS_PROXY}
         NO_PROXY: ${NO_PROXY}
+    container_name: geoportal-backend
     environment:
       DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD_URL}@db:5432/geoportal
       HTTP_PROXY: ${HTTP_PROXY}
