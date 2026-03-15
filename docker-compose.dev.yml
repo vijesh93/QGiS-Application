@@ -74,5 +74,4 @@ services:
 
 networks:
   gis-network:
-    external: true
-    name: qgis_layer_service_gis-network
+  
