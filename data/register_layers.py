@@ -105,6 +105,7 @@ def register_rasters():
         # Step 3: Register in database
         slug         = tif.stem
         display_name = slug.replace("_", " ").title()
+        category = slug.split('_')[0]
         server_path  = raster_server_path(tif.name)
 
         query = """
@@ -114,7 +115,7 @@ def register_rasters():
                 file_path = EXCLUDED.file_path,
                 bbox      = EXCLUDED.bbox;
         """
-        cur.execute(query, (slug, display_name, "Environment", "raster", server_path, meta["bbox"]))
+        cur.execute(query, (slug, display_name, category, "raster", server_path, meta["bbox"]))
         print(f"✅ Registered: {slug}")
         success += 1
 

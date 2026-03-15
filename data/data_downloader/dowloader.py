@@ -1,15 +1,20 @@
 import os
+import time
 import requests
 from urllib.parse import urlparse
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
-# Create a directory to store downloads
-script_dir = os.path.dirname(os.path.abspath(__file__))          # data/data_downloader/
-data_dir   = os.path.dirname(script_dir)                          # data/
-download_dir = os.path.join(data_dir, "data_files", "Raster")    # data/data_files/Raster/
+# ── Paths ─────────────────────────────────────────────────────────────────────
+script_dir   = os.path.dirname(os.path.abspath(__file__))   # data/data_downloader/
+data_dir     = os.path.dirname(script_dir)                  # data/
+download_dir = os.path.join(data_dir, "data_files", "Raster")
 os.makedirs(download_dir, exist_ok=True)
 
-# List of 1KM resolution files from the document
+# ── Settings ──────────────────────────────────────────────────────────────────
+MAX_RETRIES   = 5       # retry each file up to 5 times on 503
+RETRY_DELAY   = 10      # seconds to wait between retries (doubles each attempt)
+REQUEST_DELAY = 2       # seconds to wait between each file (avoids rate limiting)
+
+# ── URLs ──────────────────────────────────────────────────────────────────────
 urls_1km = [
     "https://hs.pangaea.de/model/SRTM/aspect/aspectcosine_1KMma_SRTM.tif",
     "https://hs.pangaea.de/model/SRTM/aspect/aspectcosine_1KMmd_SRTM.tif",
@@ -60,54 +65,91 @@ urls_1km = [
     "https://hs.pangaea.de/model/SRTM/vrm/vrm_1KMmd_SRTM.tif",
     "https://hs.pangaea.de/model/SRTM/vrm/vrm_1KMmi_SRTM.tif",
     "https://hs.pangaea.de/model/SRTM/vrm/vrm_1KMmn_SRTM.tif",
-    "https://hs.pangaea.de/model/SRTM/vrm/vrm_1KMsd_SRTM.tif"
+    "https://hs.pangaea.de/model/SRTM/vrm/vrm_1KMsd_SRTM.tif",
 ]
 
-def download_file(url):
-    try:
-        # Extract filename from URL
-        parsed_url = urlparse(url)
-        filename = os.path.basename(parsed_url.path)
-        filepath = os.path.join(download_dir, filename)
 
-        # Skip if file already exists
-        if os.path.exists(filepath):
-            print(f"File already exists: {filename}")
+def download_file(url: str) -> tuple[str, bool]:
+    """Download a single file with exponential backoff retry on 503."""
+    parsed   = urlparse(url)
+    filename = os.path.basename(parsed.path)
+    filepath = os.path.join(download_dir, filename)
+
+    # Skip if already fully downloaded
+    if os.path.exists(filepath):
+        print(f"  ⏩ Already exists, skipping: {filename}")
+        return filename, True
+
+    for attempt in range(1, MAX_RETRIES + 1):
+        try:
+            print(f"  ⬇️  Downloading ({attempt}/{MAX_RETRIES}): {filename}")
+            response = requests.get(url, stream=True, timeout=60)
+            response.raise_for_status()
+
+            # Write to a temp file first — avoids leaving corrupt partial files
+            tmp_path = filepath + ".tmp"
+            with open(tmp_path, "wb") as f:
+                for chunk in response.iter_content(chunk_size=65536):
+                    if chunk:
+                        f.write(chunk)
+
+            os.rename(tmp_path, filepath)
+            print(f"  ✅ Done: {filename}")
             return filename, True
 
-        print(f"Downloading: {filename}")
+        except requests.exceptions.HTTPError as e:
+            status = e.response.status_code if e.response else "?"
+            if status == 503 and attempt < MAX_RETRIES:
+                delay = RETRY_DELAY * (2 ** (attempt - 1))  # 10s, 20s, 40s, 80s
+                print(f"  ⚠️  503 from server — waiting {delay}s before retry...")
+                time.sleep(delay)
+            else:
+                print(f"  ❌ Failed after {attempt} attempts: {filename} — {e}")
+                # Clean up temp file if it exists
+                if os.path.exists(filepath + ".tmp"):
+                    os.remove(filepath + ".tmp")
+                return filename, False
 
-        # Stream the download to handle large files
-        response = requests.get(url, stream=True)
-        response.raise_for_status()
+        except Exception as e:
+            print(f"  ❌ Unexpected error for {filename}: {e}")
+            if os.path.exists(filepath + ".tmp"):
+                os.remove(filepath + ".tmp")
+            return filename, False
 
-        # Save the file
-        with open(filepath, 'wb') as f:
-            for chunk in response.iter_content(chunk_size=8192):
-                if chunk:
-                    f.write(chunk)
+    return filename, False
 
-        return filename, True
-    except Exception as e:
-        print(f"Error downloading {url}: {str(e)}")
-        return url, False
 
 def main():
-    print(f"Starting download of {len(urls_1km)} 1KM resolution files...")
-    print(f"Files will be saved to: {os.path.abspath(download_dir)}")
+    print(f"Starting sequential download of {len(urls_1km)} files")
+    print(f"Saving to: {os.path.abspath(download_dir)}")
+    print(f"Delay between files: {REQUEST_DELAY}s  |  Max retries: {MAX_RETRIES}\n")
 
-    # Use ThreadPoolExecutor for concurrent downloads (adjust max_workers as needed)
-    with ThreadPoolExecutor(max_workers=4) as executor:
-        futures = [executor.submit(download_file, url) for url in urls_1km]
+    failed = []
+    success_count = 0
 
-        success_count = 0
-        for future in as_completed(futures):
-            filename, success = future.result()
-            if success:
-                success_count += 1
+    for i, url in enumerate(urls_1km, 1):
+        print(f"[{i:02d}/{len(urls_1km)}]")
+        filename, ok = download_file(url)
+        if ok:
+            success_count += 1
+        else:
+            failed.append(url)
 
-    print(f"\nDownload complete!")
-    print(f"Successfully downloaded {success_count}/{len(urls_1km)} files")
+        # Polite delay between requests — avoids triggering rate limit
+        if i < len(urls_1km):
+            time.sleep(REQUEST_DELAY)
+
+    print(f"\n{'='*50}")
+    print(f"✅ Successfully downloaded: {success_count}/{len(urls_1km)}")
+
+    if failed:
+        print(f"❌ Failed ({len(failed)} files):")
+        for url in failed:
+            print(f"   {url}")
+        print(f"\nRe-run the script to retry — existing files are skipped automatically.")
+    else:
+        print("🎉 All files downloaded successfully!")
+
 
 if __name__ == "__main__":
     main()
