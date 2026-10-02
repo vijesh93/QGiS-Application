@@ -69,11 +69,22 @@ urls_1km = [
 ]
 
 
+def category_from_url(url: str) -> str:
+    """The category is the parent directory of the file in the URL path,
+    e.g. '.../model/SRTM/aspect/aspectcosine_1KMma_SRTM.tif' -> 'aspect'."""
+    parsed = urlparse(url)
+    parts = parsed.path.strip("/").split("/")
+    return parts[-2] if len(parts) >= 2 else "Uncategorized"
+
+
 def download_file(url: str) -> tuple[str, bool]:
     """Download a single file with exponential backoff retry on 503."""
-    parsed   = urlparse(url)
-    filename = os.path.basename(parsed.path)
-    filepath = os.path.join(download_dir, filename)
+    parsed    = urlparse(url)
+    filename  = os.path.basename(parsed.path)
+    category  = category_from_url(url)
+    category_dir = os.path.join(download_dir, category)
+    os.makedirs(category_dir, exist_ok=True)
+    filepath  = os.path.join(category_dir, filename)
 
     # Skip if already fully downloaded
     if os.path.exists(filepath):

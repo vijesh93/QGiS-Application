@@ -7,6 +7,8 @@ import subprocess
 import json
 from pathlib import Path
 
+from raster_utils import prepare_single_band_source
+
 # ── Paths (work inside container AND on host, Windows or Linux) ──────────────
 # Script lives at:  data/register_layers.py
 # Container maps:   ./data → /app
@@ -15,10 +17,21 @@ from pathlib import Path
 _SCRIPT_DIR = Path(__file__).resolve().parent   # data/  (host) or /app/ (container)
 RASTER_DIR        = _SCRIPT_DIR / "data_files" / "Raster"
 OPTIMIZED_DIR     = _SCRIPT_DIR / "data_files" / "Optimized_Raster"
+UNCATEGORIZED     = "Uncategorized"
 
 # Path as seen by the raster-server container (its volume mount is also ./data → /data)
-def raster_server_path(filename: str) -> str:
-    return f"/data/data_files/Optimized_Raster/{filename}"
+def raster_server_path(rel_path: Path) -> str:
+    return f"/data/data_files/Optimized_Raster/{rel_path.as_posix()}"
+
+
+def relative_to_raster(tif: Path) -> Path:
+    """Path of a raster relative to RASTER_DIR, e.g. 'aspect/foo.tif'.
+    Files sitting directly in RASTER_DIR (no category folder) are bucketed
+    under UNCATEGORIZED so every registered layer still has a category."""
+    rel = tif.relative_to(RASTER_DIR)
+    if len(rel.parts) == 1:
+        return Path(UNCATEGORIZED) / rel
+    return rel
 
 # ── DB connection ─────────────────────────────────────────────────────────────
 DB_URL = os.getenv("DATABASE_URL")
@@ -48,19 +61,32 @@ def get_raster_metadata(file_path: Path):
 
 
 def optimize_to_cog(src: Path, dst: Path) -> bool:
-    """Convert a GeoTIFF to Cloud Optimized GeoTIFF using gdal_translate."""
-    try:
-        dst.parent.mkdir(parents=True, exist_ok=True)
-        if dst.exists():
-            print(f"  ↳ Already optimized, skipping conversion: {dst.name}")
-            return True
+    """Convert a GeoTIFF to Cloud Optimized GeoTIFF using gdal_translate.
 
+    Multi-band sources (e.g. a daily time series for a year) are collapsed
+    to a single band (annual mean) first, since TiTiler/the frontend expect
+    one band per registered layer. A raster that already has a single band
+    passes through unchanged.
+    """
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    if dst.exists():
+        print(f"  ↳ Already optimized, skipping conversion: {dst.name}")
+        return True
+
+    mean_tmp = dst.parent / f"_{dst.stem}.band_mean_tmp.tif"
+    try:
+        conversion_src = prepare_single_band_source(src, mean_tmp)
+    except Exception as e:
+        print(f"❌ Could not read {src.name}, skipping: {e}")
+        return False
+
+    try:
         subprocess.run([
             "gdal_translate",
             "-of", "COG",
             "-co", "COMPRESS=DEFLATE",
             "-co", "OVERVIEW_RESAMPLING=AVERAGE",
-            str(src), str(dst)
+            str(conversion_src), str(dst)
         ], check=True, capture_output=True)
 
         print(f"  ↳ Optimized → {dst.name}")
@@ -69,15 +95,18 @@ def optimize_to_cog(src: Path, dst: Path) -> bool:
     except subprocess.CalledProcessError as e:
         print(f"❌ COG conversion failed for {src.name}: {e.stderr}")
         return False
+    finally:
+        if conversion_src == mean_tmp and mean_tmp.exists():
+            mean_tmp.unlink()
 
 
 def register_rasters():
-    tifs = list(RASTER_DIR.glob("*.tif"))
+    tifs = list(RASTER_DIR.rglob("*.tif"))
     if not tifs:
         print(f"⚠️  No .tif files found in {RASTER_DIR}")
         return
 
-    print(f"📂 Found {len(tifs)} rasters in Raster/ folder")
+    print(f"📂 Found {len(tifs)} rasters in Raster/ folder (across all category subfolders)")
     print(f"   Source:      {RASTER_DIR}")
     print(f"   Destination: {OPTIMIZED_DIR}\n")
 
@@ -87,10 +116,12 @@ def register_rasters():
     success, skipped = 0, 0
 
     for tif in tifs:
-        optimized = OPTIMIZED_DIR / tif.name
-        print(f"▶ Processing: {tif.name}")
+        rel_path  = relative_to_raster(tif)
+        category  = rel_path.parts[0]
+        optimized = OPTIMIZED_DIR / rel_path
+        print(f"▶ Processing: {rel_path}")
 
-        # Step 1: Convert to COG into Optimized_Raster/
+        # Step 1: Convert to COG into Optimized_Raster/<category>/
         if not optimize_to_cog(tif, optimized):
             skipped += 1
             continue
@@ -98,25 +129,27 @@ def register_rasters():
         # Step 2: Extract metadata from the optimized file
         meta = get_raster_metadata(optimized)
         if not meta:
-            print(f"⚠️  Skipping {tif.name}: no spatial metadata found.")
+            print(f"⚠️  Skipping {rel_path}: no spatial metadata found.")
             skipped += 1
             continue
 
         # Step 3: Register in database
-        slug         = tif.stem
-        display_name = slug.replace("_", " ").title()
-        category = slug.split('_')[0]
-        server_path  = raster_server_path(tif.name)
+        # slug is prefixed with category so identically-named files in
+        # different category folders don't collide on the UNIQUE slug column.
+        slug         = f"{category}_{tif.stem}".lower()
+        display_name = tif.stem.replace("_", " ").title()
+        server_path  = raster_server_path(rel_path)
 
         query = """
             INSERT INTO layer_metadata (slug, display_name, category, layer_type, file_path, bbox)
             VALUES (%s, %s, %s, %s, %s, ST_GeomFromText(%s, 4326))
             ON CONFLICT (slug) DO UPDATE SET
+                category  = EXCLUDED.category,
                 file_path = EXCLUDED.file_path,
                 bbox      = EXCLUDED.bbox;
         """
         cur.execute(query, (slug, display_name, category, "raster", server_path, meta["bbox"]))
-        print(f"✅ Registered: {slug}")
+        print(f"✅ Registered: {slug} (category: {category})")
         success += 1
 
     conn.commit()

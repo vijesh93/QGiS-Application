@@ -70,9 +70,11 @@ def fail(msg):
     sys.exit(1)
 
 def count_tifs(directory: Path) -> int:
+    """Counts .tif/.tiff files recursively, since rasters now live under
+    category subfolders (directory/<Category>/file.tif)."""
     if not directory.exists():
         return 0
-    return len(list(directory.glob("*.tif")) + list(directory.glob("*.tiff")))
+    return len(list(directory.rglob("*.tif")) + list(directory.rglob("*.tiff")))
 
 def run(script: Path, label: str) -> bool:
     """Run a Python script as a subprocess. Returns True on success."""
