@@ -17,9 +17,14 @@ class Layer(SQLModel, table=True):
     layer_type: str
     file_path: Optional[str] = None
     is_active: bool = Field(default=True)
-    
+
     # Geometry column
     bbox: Optional[Any] = Field(sa_column=Column(Geometry("POLYGON", srid=4326)))
+
+    # Real (nodata-excluded) band min/max, used as the TiTiler rescale window
+    # so each layer gets its own color stretch instead of a hardcoded one.
+    min_value: Optional[float] = None
+    max_value: Optional[float] = None
 
 # This model can later be extended for GenAI features
 # e.g., adding a 'description_vector' column for semantic search

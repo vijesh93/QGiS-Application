@@ -19,6 +19,8 @@ class LayerRead(BaseModel):
     category: str
     layer_type: str
     file_path: Optional[str]
+    min_value: Optional[float] = None
+    max_value: Optional[float] = None
     extent: Optional[Any] = None
 
     @field_validator("extent", mode="before")
