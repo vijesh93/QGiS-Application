@@ -92,7 +92,13 @@ const MapView = ({ BaseMapTransparency, activeLayersList, opacities }) => {
         const mapId = toMapId(layer.id);
         if (addedLayers.current.has(mapId)) return;
 
-        const tileUrl = buildTileUrl(layer.cog_path);
+        // Each layer gets its own color stretch from its real data range;
+        // falls back to buildTileUrl's default (-1,1) if not yet registered
+        // with a min/max (e.g. before a re-run of register_layers.py).
+        const rescale = (layer.minValue != null && layer.maxValue != null)
+          ? `${layer.minValue},${layer.maxValue}`
+          : undefined;
+        const tileUrl = buildTileUrl(layer.cog_path, rescale);
         console.log(`Adding "${layer.name}" → ${tileUrl}`);
 
         try {

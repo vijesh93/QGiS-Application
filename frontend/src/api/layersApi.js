@@ -20,6 +20,8 @@ function normaliseLayer(raw) {
     description: raw.description || '',
     resolution:  raw.resolution  || null,
     year:        raw.year        || null,
+    minValue:    raw.min_value   ?? null,
+    maxValue:    raw.max_value   ?? null,
     tile_url:    null,
   };
 }
