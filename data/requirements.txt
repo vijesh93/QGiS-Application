@@ -22,3 +22,10 @@ sqlalchemy
 
 # http requests
 requests
+
+# Jupyter kernel (for VS Code notebook debugging inside this container)
+ipykernel
+notebook
+
+# ipython for interactive computing
+ipython
