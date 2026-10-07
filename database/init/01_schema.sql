@@ -13,7 +13,9 @@ CREATE TABLE layer_metadata (
     min_zoom INTEGER DEFAULT 0,
     max_zoom INTEGER DEFAULT 12,
     bbox GEOMETRY(Polygon, 4326),         -- Spatial extent of the layer
-    
+    min_value DOUBLE PRECISION,           -- Real (nodata-excluded) band min, for TiTiler rescale
+    max_value DOUBLE PRECISION,           -- Real (nodata-excluded) band max, for TiTiler rescale
+
     is_active BOOLEAN DEFAULT true,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

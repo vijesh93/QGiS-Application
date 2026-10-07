@@ -14,9 +14,26 @@ flags or configuration.
 """
 
 from pathlib import Path
+from typing import Optional, Tuple
 
 import numpy as np
 import rasterio
+
+
+def compute_band_range(path: Path) -> Optional[Tuple[float, float]]:
+    """Returns (min, max) of the real (nodata-excluded) values in band 1.
+
+    Used to give each registered layer its own TiTiler rescale window instead
+    of a hardcoded one — a layer whose values don't happen to fall in [-1, 1]
+    renders as a flat, undetailed color otherwise. Returns None if the band
+    has no valid (non-nodata) pixels at all.
+    """
+    with rasterio.open(path) as ds:
+        data = ds.read(1, masked=True)
+        valid = data.compressed()
+        if valid.size == 0:
+            return None
+        return float(valid.min()), float(valid.max())
 
 
 def prepare_single_band_source(src: Path, tmp_path: Path) -> Path:

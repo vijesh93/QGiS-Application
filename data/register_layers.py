@@ -7,7 +7,7 @@ import subprocess
 import json
 from pathlib import Path
 
-from raster_utils import prepare_single_band_source
+from raster_utils import compute_band_range, prepare_single_band_source
 
 # ── Paths (work inside container AND on host, Windows or Linux) ──────────────
 # Script lives at:  data/register_layers.py
@@ -15,6 +15,8 @@ from raster_utils import prepare_single_band_source
 # So:  __file__ parent = "data/" on host, "/app" in container — same structure.
 
 _SCRIPT_DIR = Path(__file__).resolve().parent   # data/  (host) or /app/ (container)
+# _SCRIPT_DIR = Path(os.getcwd()).resolve()
+
 RASTER_DIR        = _SCRIPT_DIR / "data_files" / "Raster"
 OPTIMIZED_DIR     = _SCRIPT_DIR / "data_files" / "Optimized_Raster"
 UNCATEGORIZED     = "Uncategorized"
@@ -133,6 +135,11 @@ def register_rasters():
             skipped += 1
             continue
 
+        # Step 2b: Real (nodata-excluded) value range, used for the frontend's
+        # per-layer TiTiler rescale instead of a one-size-fits-all default.
+        value_range = compute_band_range(optimized)
+        min_value, max_value = value_range if value_range else (None, None)
+
         # Step 3: Register in database
         # slug is prefixed with category so identically-named files in
         # different category folders don't collide on the UNIQUE slug column.
@@ -141,15 +148,17 @@ def register_rasters():
         server_path  = raster_server_path(rel_path)
 
         query = """
-            INSERT INTO layer_metadata (slug, display_name, category, layer_type, file_path, bbox)
-            VALUES (%s, %s, %s, %s, %s, ST_GeomFromText(%s, 4326))
+            INSERT INTO layer_metadata (slug, display_name, category, layer_type, file_path, bbox, min_value, max_value)
+            VALUES (%s, %s, %s, %s, %s, ST_GeomFromText(%s, 4326), %s, %s)
             ON CONFLICT (slug) DO UPDATE SET
                 category  = EXCLUDED.category,
                 file_path = EXCLUDED.file_path,
-                bbox      = EXCLUDED.bbox;
+                bbox      = EXCLUDED.bbox,
+                min_value = EXCLUDED.min_value,
+                max_value = EXCLUDED.max_value;
         """
-        cur.execute(query, (slug, display_name, category, "raster", server_path, meta["bbox"]))
-        print(f"✅ Registered: {slug} (category: {category})")
+        cur.execute(query, (slug, display_name, category, "raster", server_path, meta["bbox"], min_value, max_value))
+        print(f"✅ Registered: {slug} (category: {category}, range: {min_value}..{max_value})")
         success += 1
 
     conn.commit()
