@@ -2,17 +2,75 @@
 // Floating bottom-left overlay — styled to match the dark geoportal theme.
 // Uses inline styles only so no CSS file changes are needed.
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 const CATEGORY_COLORS = [
   '#4FC3F7', '#81C784', '#FFB74D', '#F48FB1',
   '#CE93D8', '#80DEEA', '#FFCC02', '#A5D6A7',
 ];
 
+// band 1 = synthetic "mean" band; bands 2..bandCount = real timesteps.
+function formatBandLabel(layer, band) {
+  if (band <= 1) return 'Mean';
+  if (layer.bandStartDate && layer.bandDateStepDays) {
+    const d = new Date(layer.bandStartDate);
+    d.setDate(d.getDate() + (band - 2) * layer.bandDateStepDays);
+    return d.toISOString().slice(0, 10);
+  }
+  return `Day ${band - 1} of ${layer.bandCount - 1}`;
+}
+
+// Dragging this fires onChange on every pixel of movement — committing each
+// one straight to the map would mean a fresh TiTiler tile request per pixel.
+// Instead: the slider's visual position (and label) follows the drag
+// instantly via local state, but the actual band change (and the tile
+// request cascade it triggers in MapView) only commits on release — mouse,
+// touch, or keyboard (arrow keys don't "release", so keyup commits there).
+function TimeSliderRow({ layer, selectedBand, setLayerBand, color }) {
+  const [dragValue, setDragValue] = useState(selectedBand);
+
+  // Stay in sync when the band changes from elsewhere (e.g. the master
+  // time control), as long as the user isn't actively dragging this slider.
+  useEffect(() => {
+    setDragValue(selectedBand);
+  }, [selectedBand]);
+
+  const commit = (e) => setLayerBand(layer.id, Number(e.target.value));
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '5px' }}>
+      <span style={{ fontSize: '10px', color: '#4a6077', width: '16px' }}>⏱</span>
+      <input
+        type="range"
+        min="1" max={layer.bandCount} step="1"
+        value={dragValue}
+        onChange={e => setDragValue(Number(e.target.value))}
+        onMouseUp={commit}
+        onTouchEnd={commit}
+        onKeyUp={commit}
+        aria-label={`${layer.name} timestep`}
+        style={{
+          flex: 1, height: '3px', cursor: 'pointer',
+          accentColor: color,
+        }}
+      />
+      <span style={{
+        fontSize: '10px', color: '#8fa3b8',
+        fontFamily: 'monospace', minWidth: '32px', textAlign: 'right',
+        whiteSpace: 'nowrap',
+      }}>
+        {formatBandLabel(layer, dragValue)}
+      </span>
+    </div>
+  );
+}
+
 export default function ActiveLayersLegend({
   activeLayersList,
   opacities,
   setLayerOpacity,
+  selectedBands,
+  setLayerBand,
   toggleLayer,
   allLayers,
 }) {
@@ -152,6 +210,16 @@ export default function ActiveLayersLegend({
                     {opacity}%
                   </span>
                 </div>
+
+                {/* Time row — only for multi-band (time-series) layers */}
+                {layer.bandCount > 1 && (
+                  <TimeSliderRow
+                    layer={layer}
+                    selectedBand={selectedBands[layer.id] ?? 1}
+                    setLayerBand={setLayerBand}
+                    color={color}
+                  />
+                )}
               </div>
             );
           })}

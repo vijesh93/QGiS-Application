@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Layers, Settings2, Search, X, ChevronDown, Eye, EyeOff } from 'lucide-react';
 
 // One accent colour per category, cycling if there are more than 8 categories
@@ -14,6 +14,9 @@ const Sidebar = ({
   // ── Base map controls (your existing props) ──
   BaseMapTransparency,
   setBaseMapTransparency,
+  // ── Master time control — drives every active multi-band layer at once ──
+  masterTimePct,       // number 0-100
+  onMasterTimeChange,  // function(pct) — updates the slider and every active layer's band
   // ── Layer browser props (new, passed from App.jsx) ──
   groupedLayers,      // { [category]: { [subcategory]: layer[] } }
   activeLayers,       // { [layerId]: true/false }
@@ -38,6 +41,17 @@ const Sidebar = ({
   allCategoryNames.forEach((cat, i) => {
     catColor[cat] = CATEGORY_COLORS[i % CATEGORY_COLORS.length];
   });
+
+  // The master time slider fires onChange on every pixel of drag; committing
+  // each one would cascade into a fresh TiTiler request per active layer per
+  // pixel. Its visual position follows the drag instantly via local state,
+  // but onMasterTimeChange (which triggers those requests) only fires on
+  // release — mouse, touch, or keyboard.
+  const [dragTimePct, setDragTimePct] = useState(masterTimePct);
+  useEffect(() => {
+    setDragTimePct(masterTimePct);
+  }, [masterTimePct]);
+  const commitMasterTime = (e) => onMasterTimeChange(Number(e.target.value));
 
   return (
     <aside className="w-80 bg-slate-900 text-slate-100 h-screen flex flex-col shadow-xl z-10 flex-shrink-0">
@@ -82,8 +96,34 @@ const Sidebar = ({
             <span>100%</span>
           </div>
         </div>
+
+        {/* Master time control — moves every active time-series layer at once. */}
+        <div className="bg-slate-800 p-4 rounded-lg border border-slate-700 mt-3">
+          <label className="block text-sm font-medium mb-3">
+            Time Position
+          </label>
+          <input
+            type="range"
+            className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+            min="0" max="100"
+            value={dragTimePct}
+            onChange={(e) => setDragTimePct(Number(e.target.value))}
+            onMouseUp={commitMasterTime}
+            onTouchEnd={commitMasterTime}
+            onKeyUp={commitMasterTime}
+          />
+          <div className="flex justify-between text-xs text-slate-500 mt-2 font-mono">
+            <span>Mean</span>
+            <span>{dragTimePct}%</span>
+            <span>Latest</span>
+          </div>
+          <p className="text-[11px] text-slate-500 mt-2 leading-snug">
+            Scrubs every active multi-band layer to the same relative position in
+            its own time range. Layers without multiple timesteps are unaffected.
+          </p>
+        </div>
       </div>
-      
+
       {/* Search bar */}
       <div className="px-4 py-3 border-b border-slate-800">
         <div className="flex items-center gap-2 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500/20">

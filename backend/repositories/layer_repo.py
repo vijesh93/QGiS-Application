@@ -21,6 +21,9 @@ class LayerRepository:
             Layer.file_path,
             Layer.min_value,
             Layer.max_value,
+            Layer.band_count,
+            Layer.band_start_date,
+            Layer.band_date_step_days,
             # This is the magic: Database turns binary map data into a text string
             func.ST_AsGeoJSON(Layer.bbox).label("extent")
         )

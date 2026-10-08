@@ -1,7 +1,7 @@
 from sqlmodel import SQLModel
 from pydantic import BaseModel, Field, field_validator, ConfigDict
 from typing import List, Optional, Any
-from datetime import datetime
+from datetime import date, datetime
 import json
 
 
@@ -21,6 +21,9 @@ class LayerRead(BaseModel):
     file_path: Optional[str]
     min_value: Optional[float] = None
     max_value: Optional[float] = None
+    band_count: int = 1
+    band_start_date: Optional[date] = None
+    band_date_step_days: Optional[int] = None
     extent: Optional[Any] = None
 
     @field_validator("extent", mode="before")

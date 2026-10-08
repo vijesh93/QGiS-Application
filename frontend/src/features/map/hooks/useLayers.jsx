@@ -7,11 +7,19 @@ export function useLayers() {
   const [allLayers, setAllLayers]               = useState([]);
   const [activeLayers, setActiveLayers]         = useState({});
   const [opacities, setOpacities]               = useState({});
+  const [selectedBands, setSelectedBands]       = useState({});
   const [loading, setLoading]                   = useState(true);
   const [error, setError]                       = useState(null);
   const [searchQuery, setSearchQuery]           = useState('');
   const [rasterCount, setRasterCount]           = useState(null);
   const [expandedCategories, setExpandedCategories] = useState({});
+
+  // Kept current for stable callbacks (applyMasterPercentage) that must read
+  // the latest values without changing identity on every layer/toggle change.
+  const allLayersRef    = useRef([]);
+  const activeLayersRef = useRef({});
+  useEffect(() => { allLayersRef.current = allLayers; }, [allLayers]);
+  useEffect(() => { activeLayersRef.current = activeLayers; }, [activeLayers]);
 
   // ── Load layers on mount ───────────────────────────────────────────────
   useEffect(() => {
@@ -33,15 +41,18 @@ export function useLayers() {
           const initOpacity  = {};
           const initActive   = {};
           const initExpanded = {};
+          const initBand     = {};
           data.forEach((l) => {
             initOpacity[l.id]  = 80;
             initActive[l.id]   = false;
+            initBand[l.id]     = 1; // band 1 = synthetic "mean" band (or the only band)
             if (l.category) initExpanded[l.category] = true;
           });
-          // Batch all three state updates — React 18 batches these automatically
+          // Batch all state updates — React 18 batches these automatically
           setOpacities(initOpacity);
           setActiveLayers(initActive);
           setExpandedCategories(initExpanded);
+          setSelectedBands(initBand);
         } else {
           throw layers.reason;
         }
@@ -69,6 +80,28 @@ export function useLayers() {
 
   const setLayerOpacity = useCallback((layerId, value) => {
     setOpacities((prev) => ({ ...prev, [layerId]: value }));
+  }, []);
+
+  const setLayerBand = useCallback((layerId, bandIndex) => {
+    setSelectedBands((prev) => ({ ...prev, [layerId]: bandIndex }));
+  }, []);
+
+  // Maps a 0-100% master position independently onto each active multi-band
+  // layer's own band range: 0% = band 1 (Mean) for every layer, 100% = each
+  // layer's own last band. Layers with bandCount <= 1 are left untouched —
+  // the master control has no effect on static layers.
+  const applyMasterPercentage = useCallback((pct) => {
+    setSelectedBands((prev) => {
+      const next = { ...prev };
+      allLayersRef.current.forEach((layer) => {
+        if (!activeLayersRef.current[layer.id]) return;
+        if (!layer.bandCount || layer.bandCount <= 1) return;
+        next[layer.id] = pct <= 0
+          ? 1
+          : 2 + Math.round((pct / 100) * (layer.bandCount - 2));
+      });
+      return next;
+    });
   }, []);
 
   const toggleCategory = useCallback((category) => {
@@ -126,6 +159,7 @@ export function useLayers() {
     allLayers,
     activeLayers,
     opacities,
+    selectedBands,
     loading,
     error,
     searchQuery,
@@ -137,6 +171,8 @@ export function useLayers() {
     activeLayersList,
     toggleLayer,
     setLayerOpacity,
+    setLayerBand,
+    applyMasterPercentage,
     toggleCategory,
     clearAllLayers,
   };

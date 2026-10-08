@@ -16,6 +16,14 @@ CREATE TABLE layer_metadata (
     min_value DOUBLE PRECISION,           -- Real (nodata-excluded) band min, for TiTiler rescale
     max_value DOUBLE PRECISION,           -- Real (nodata-excluded) band max, for TiTiler rescale
 
+    -- Time-series metadata: band 1 is a synthetic "mean" band when band_count > 1.
+    -- Bands 2..band_count are real timesteps starting at band_start_date, one every
+    -- band_date_step_days. NULL start/step means no parseable per-band date convention
+    -- was found (frontend falls back to plain "Band i of N" labeling).
+    band_count INTEGER DEFAULT 1,
+    band_start_date DATE,
+    band_date_step_days INTEGER,
+
     is_active BOOLEAN DEFAULT true,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

@@ -22,6 +22,9 @@ function normaliseLayer(raw) {
     year:        raw.year        || null,
     minValue:    raw.min_value   ?? null,
     maxValue:    raw.max_value   ?? null,
+    bandCount:       raw.band_count          ?? 1,
+    bandStartDate:   raw.band_start_date     ?? null,
+    bandDateStepDays: raw.band_date_step_days ?? null,
     tile_url:    null,
   };
 }
@@ -59,9 +62,25 @@ export async function fetchRasterInventory() {
 //     ?url=/data/data_files/Optimized_Raster/aspectcosine_1KMma_SRTM.tif
 //     &rescale=-1,1
 //     &colormap_name=viridis
+//     &bidx=2
 //
 // IMPORTANT: No encoding on url= or rescale= — plain string concatenation only.
 //
-export function buildTileUrl(cogPath, rescale = '-1,1', colormap = 'viridis') {
-  return `${TITILER_URL}/cog/tiles/WebMercatorQuad/{z}/{x}/{y}.png?url=${cogPath}&rescale=${rescale}&colormap_name=${colormap}`;
+// `bidx` selects which band a time-series layer's tiles come from (1 = the
+// synthetic "mean" band, 2..N = real timesteps — see band_count/band_start_date
+// on the layer). Omitted entirely for single-band layers, so they're unaffected.
+export function buildTileUrl(cogPath, rescale = '-1,1', colormap = 'viridis', bidx = null) {
+  const bidxParam = bidx != null ? `&bidx=${bidx}` : '';
+  return `${TITILER_URL}/cog/tiles/WebMercatorQuad/{z}/{x}/{y}.png?url=${cogPath}&rescale=${rescale}&colormap_name=${colormap}${bidxParam}`;
+}
+
+// Per-band VRT path for a multi-band/time-series layer, mirroring
+// data/raster_utils.py's generate_band_vrts() naming convention exactly:
+// `<stem>_band{NNN}.vrt`, co-located with its source .tif. Requesting tiles
+// against this instead of `cogPath` + `bidx` avoids TiTiler/rio-tiler
+// warping every band of the source file just to serve one — see
+// docs/vrt_explainer.md. These two naming conventions must stay in sync.
+export function buildBandVrtPath(cogPath, band) {
+  const padded = String(band).padStart(3, '0');
+  return cogPath.replace(/\.tif$/i, `_band${padded}.vrt`);
 }

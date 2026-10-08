@@ -1,22 +1,44 @@
 import React, { useEffect, useRef, useCallback } from 'react';
 import maplibregl from 'maplibre-gl';
-import { buildTileUrl } from '../../api/layersApi';
+import { buildTileUrl, buildBandVrtPath } from '../../api/layersApi';
 
 const toMapId = (id) => `layer_${id}`;
 
-// We keep opacities in a ref (not just prop) so the opacity effect
-// doesn't cause the sync effect to re-run.
-const MapView = ({ BaseMapTransparency, activeLayersList, opacities }) => {
-  const mapContainer    = useRef(null);
-  const mapRef          = useRef(null);
-  const mapReadyRef     = useRef(false);   // true once 'load' has fired
-  const addedLayers     = useRef(new Set());
-  const opacitiesRef    = useRef(opacities);
-  const pendingSyncRef  = useRef(null);    // queued sync call waiting for map load
+// Builds this layer's tile URL, including its own rescale and (when it's a
+// multi-band/time-series layer) the currently-selected band. Multi-band
+// layers are requested against a per-band VRT (see buildBandVrtPath) rather
+// than the big multi-band file + `bidx` — the VRT exposes exactly one band,
+// so TiTiler never warps the other N-1 bands just to serve this one (see
+// docs/vrt_explainer.md).
+function buildLayerTileUrl(layer, selectedBand) {
+  const rescale = (layer.minValue != null && layer.maxValue != null)
+    ? `${layer.minValue},${layer.maxValue}`
+    : undefined;
+  if (layer.bandCount > 1) {
+    const vrtPath = buildBandVrtPath(layer.cog_path, selectedBand ?? 1);
+    return buildTileUrl(vrtPath, rescale, undefined, null);
+  }
+  return buildTileUrl(layer.cog_path, rescale, undefined, null);
+}
 
-  // Keep opacitiesRef current without triggering effects
+// We keep opacities/selectedBands in refs (not just props) so their effects
+// don't cause the add/remove sync effect to re-run.
+const MapView = ({ BaseMapTransparency, activeLayersList, opacities, selectedBands }) => {
+  const mapContainer     = useRef(null);
+  const mapRef           = useRef(null);
+  const mapReadyRef      = useRef(false);   // true once 'load' has fired
+  const addedLayers      = useRef(new Set());
+  const opacitiesRef     = useRef(opacities);
+  const selectedBandsRef = useRef(selectedBands);
+  const lastBandRef      = useRef({});      // mapId → last-applied bidx, to skip no-op updates
+  const pendingSyncRef   = useRef(null);    // queued sync call waiting for map load
+
+  // Keep opacitiesRef/selectedBandsRef current without triggering effects
   useEffect(() => {
     opacitiesRef.current = opacities;
+  });
+  useEffect(() => {
+    selectedBandsRef.current = selectedBands;
   });
 
   // ── Init map (runs exactly once) ───────────────────────────────────────
@@ -92,13 +114,12 @@ const MapView = ({ BaseMapTransparency, activeLayersList, opacities }) => {
         const mapId = toMapId(layer.id);
         if (addedLayers.current.has(mapId)) return;
 
-        // Each layer gets its own color stretch from its real data range;
-        // falls back to buildTileUrl's default (-1,1) if not yet registered
-        // with a min/max (e.g. before a re-run of register_layers.py).
-        const rescale = (layer.minValue != null && layer.maxValue != null)
-          ? `${layer.minValue},${layer.maxValue}`
-          : undefined;
-        const tileUrl = buildTileUrl(layer.cog_path, rescale);
+        // Each layer gets its own color stretch from its real data range
+        // (falls back to buildTileUrl's default if not yet registered with a
+        // min/max), and — for multi-band/time-series layers — its currently
+        // selected band via bidx (defaults to band 1, the "Mean" band).
+        const initialBand = selectedBandsRef.current[layer.id] ?? 1;
+        const tileUrl = buildLayerTileUrl(layer, initialBand);
         console.log(`Adding "${layer.name}" → ${tileUrl}`);
 
         try {
@@ -119,6 +140,7 @@ const MapView = ({ BaseMapTransparency, activeLayersList, opacities }) => {
             },
           });
           addedLayers.current.add(mapId);
+          lastBandRef.current[mapId] = initialBand;
           console.log(`✓ "${layer.name}" added`);
         } catch (err) {
           console.error(`✗ "${layer.name}" failed:`, err.message);
@@ -150,6 +172,32 @@ const MapView = ({ BaseMapTransparency, activeLayersList, opacities }) => {
       } catch (e) { /* ignore */ }
     });
   }, [opacities]);
+
+  // ── Swap tile band on already-added layers (time slider) ───────────────
+  // Updates the source's tile URL template in place via setTiles() — no
+  // remove/re-add, no flicker — only for layers whose resolved band index
+  // actually changed since it was last applied.
+  useEffect(() => {
+    if (!mapReadyRef.current || !mapRef.current) return;
+    const map = mapRef.current;
+
+    activeLayersList.forEach((layer) => {
+      if (!layer.bandCount || layer.bandCount <= 1) return;
+      const mapId = toMapId(layer.id);
+      if (!addedLayers.current.has(mapId)) return;
+
+      const band = selectedBands[layer.id] ?? 1;
+      if (lastBandRef.current[mapId] === band) return;
+
+      try {
+        const source = map.getSource(mapId);
+        if (source) {
+          source.setTiles([buildLayerTileUrl(layer, band)]);
+          lastBandRef.current[mapId] = band;
+        }
+      } catch (e) { /* ignore */ }
+    });
+  }, [selectedBands, activeLayersList]);
 
   return (
     <div
