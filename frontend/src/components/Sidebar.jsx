@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Layers, Settings2, Search, X, ChevronDown, Eye, EyeOff } from 'lucide-react';
+import { Layers, Settings2, Search, X, ChevronDown, ChevronLeft, Eye, EyeOff } from 'lucide-react';
 
 // One accent colour per category, cycling if there are more than 8 categories
 const CATEGORY_COLORS = [
@@ -32,6 +32,9 @@ const Sidebar = ({
   setLayerOpacity,    // function(layerId, 0-100) — change a layer's opacity
   toggleCategory,     // function(category) — collapse/expand a category section
   clearAllLayers,     // function() — hide all layers at once
+  // ── Whole-sidebar collapse (new) ──
+  collapsed,          // boolean — true when the sidebar is retracted to a thin rail
+  onToggleCollapsed,  // function() — flips `collapsed`
 }) => {
 
   // Build a stable category → colour mapping so colours don't shift as
@@ -54,8 +57,22 @@ const Sidebar = ({
   const commitMasterTime = (e) => onMasterTimeChange(Number(e.target.value));
 
   return (
-    <aside className="w-80 bg-slate-900 text-slate-100 h-screen flex flex-col shadow-xl z-10 flex-shrink-0">
+    <aside className={`${collapsed ? 'w-12' : 'w-80'} relative transition-all duration-300 ease-in-out bg-slate-900 text-slate-100 h-screen flex flex-col shadow-xl z-10 flex-shrink-0`}>
 
+      {/* ── Collapse/expand toggle — always rendered, rides the aside's own
+           width transition so it ends up pinned to the screen's left edge
+           once collapsed ─────────────────────────────────────────────────── */}
+      <button
+        onClick={onToggleCollapsed}
+        aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        className="absolute -right-3 top-1/2 -translate-y-1/2 z-20 flex items-center justify-center w-7 h-7 rounded-full bg-slate-700 hover:bg-slate-600 border border-slate-600 shadow-lg"
+      >
+        <ChevronLeft size={16} className={`transition-transform ${collapsed ? 'rotate-180' : ''}`} />
+      </button>
+
+      {!collapsed && (
+      <>
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div className="p-5 border-b border-slate-700 flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -227,6 +244,8 @@ const Sidebar = ({
         <span>·</span>
         <span>© {new Date().getFullYear()}</span>
       </div>
+      </>
+      )}
     </aside>
   );
 };

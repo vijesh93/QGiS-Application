@@ -8,6 +8,7 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 function App() {
   const [BaseMapTransparency, setBaseMapTransparency] = useState(100);
   const [masterTimePct, setMasterTimePct] = useState(0);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const {
     allLayers,
@@ -59,6 +60,8 @@ function App() {
         setLayerOpacity={setLayerOpacity}
         toggleCategory={toggleCategory}
         clearAllLayers={clearAllLayers}
+        collapsed={sidebarCollapsed}
+        onToggleCollapsed={() => setSidebarCollapsed((c) => !c)}
       />
       <div style={{ flex: 1, position: 'relative', height: '100%' }}>
         <MapView
