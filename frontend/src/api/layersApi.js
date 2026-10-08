@@ -7,6 +7,21 @@ const BASE_URL = import.meta.env.VITE_API_URL || '/api/v1';
 // In prod: set VITE_TITILER_URL to public TiTiler URL.
 const TITILER_URL = import.meta.env.VITE_TITILER_URL;
 
+// Reduces a layer's GeoJSON bbox polygon (`extent`, from the backend's
+// ST_AsGeoJSON(bbox) — the layer's own raster file's real extent, not any
+// assumed region) to a MapLibre raster-source `bounds` array
+// [west, south, east, north], so MapLibre never requests tiles outside a
+// layer's real data extent. Returns null when extent is missing (defensive
+// only — every registered layer has one today), so the source falls back
+// to MapLibre's default (no restriction) rather than breaking.
+function extentToBounds(extent) {
+  const ring = extent?.coordinates?.[0];
+  if (!ring || ring.length === 0) return null;
+  const lons = ring.map((c) => c[0]);
+  const lats = ring.map((c) => c[1]);
+  return [Math.min(...lons), Math.min(...lats), Math.max(...lons), Math.max(...lats)];
+}
+
 // ─── Normalise layer shape ───────────────────────────────────────────────────
 function normaliseLayer(raw) {
   return {
@@ -25,6 +40,7 @@ function normaliseLayer(raw) {
     bandCount:       raw.band_count          ?? 1,
     bandStartDate:   raw.band_start_date     ?? null,
     bandDateStepDays: raw.band_date_step_days ?? null,
+    bounds:      extentToBounds(raw.extent),
     tile_url:    null,
   };
 }

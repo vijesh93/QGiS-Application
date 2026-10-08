@@ -129,6 +129,10 @@ const MapView = ({ BaseMapTransparency, activeLayersList, opacities, selectedBan
             tileSize: 256,
             minzoom:  0,
             maxzoom:  22, // Let MapLibre request tiles at any zoom; TiTiler handles overviews
+            // Stops MapLibre from requesting tiles outside this layer's real
+            // data extent at all (panning/zooming elsewhere issues zero
+            // requests for it) — see layersApi.js's extentToBounds().
+            ...(layer.bounds ? { bounds: layer.bounds } : {}),
           });
           map.addLayer({
             id:     mapId,
