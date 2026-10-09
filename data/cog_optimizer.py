@@ -4,14 +4,10 @@ This script uses gdalinfo to check for COG status and gdal_translate to fix them
 Using the internal GDAL tools is more robust than calling the TiTiler API for this specific task.
 """
 
-import os
-import shutil
-import subprocess
-import json
 from pathlib import Path
 import requests
 
-from raster_utils import prepare_multiband_source
+from raster_utils import optimize_to_cog, is_stale_timeseries_output
 
 
 RAW_DIR = Path("data_files/Raster")
@@ -29,22 +25,17 @@ def relative_to_raster(tif: Path) -> Path:
     return rel
 
 
-def is_cog(file_path):
-    """Checks if a file is already a COG using gdalinfo."""
-    """try:
-        cmd = ["gdalinfo", "-json", str(file_path)]
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        info = json.loads(result.stdout)
-        # Look for the COG layout metadata
-        return any("LAYOUT=COG" in str(md) for md in info.get("metadata", {}).values())
-    except:"""
-    return False
-
-
 def optimize():
+    """Converts every raw raster to its optimized form via the one shared
+    `raster_utils.optimize_to_cog()` — this used to be a separate, duplicate
+    implementation that (among other issues) always used GDAL's COG driver
+    even for multi-band time-series files, hardcoding the `INTERLEAVE=PIXEL`
+    layout that made per-band tile reads slow (see docs/vrt_explainer.md).
+    Using the shared function means this step and `register_layers.py`'s own
+    staleness check can never drift out of sync with each other again.
+    """
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     tifs = list(RAW_DIR.rglob("*.tif")) + list(RAW_DIR.rglob("*.tiff"))
-    print(tifs)
 
     print(f"🚀 Starting optimization scan on {len(tifs)} files...")
 
@@ -53,48 +44,16 @@ def optimize():
         out_file = OUT_DIR / rel_path
         out_file.parent.mkdir(parents=True, exist_ok=True)
 
-        if out_file.exists():
+        force_rebuild = is_stale_timeseries_output(tif, out_file)
+        if out_file.exists() and not force_rebuild:
             print(f"⏩ Skipping {rel_path}, optimized version already exists.")
             continue
 
-        # Multi-band sources (e.g. a daily time series for a year) get a
-        # synthetic mean band prepended ahead of the real bands. Rasters
-        # that already have a single band pass through unchanged.
-        mean_tmp = out_file.parent / f"_{out_file.stem}.band_mean_tmp.tif"
-        try:
-            conversion_src = prepare_multiband_source(tif, mean_tmp)
-        except Exception as e:
-            print(f"❌ Could not read {rel_path}, skipping: {e}")
-            continue
-
-        try:
-            if is_cog(conversion_src):
-                print(f"✅ {rel_path} is already a COG. Copying to optimized folder...")
-                shutil.copy2(str(conversion_src), str(out_file))
-            else:
-                print(f"🛠️  Optimizing {rel_path}...")
-
-                # Step 1: Build internal overviews (pyramids)
-                # -r average is good for continuous data (elevations/aspect)
-                # print("   > Building overviews...")
-                # subprocess.run(["gdaladdo", "-r", "average", str(tif), "2", "4", "8", "16", "32"])
-                # Convert to COG
-                cmd = [
-                    "gdal_translate", str(conversion_src), str(out_file),
-                    "-of", "COG",
-                    "-co", "COMPRESS=DEFLATE",
-                    "-co", "BLOCKSIZE=512",
-                    "-co", "OVERVIEWS=AUTO",
-                    "-co", "RESAMPLING=AVERAGE",
-                    "-co", "TILING=YES",
-                    "-co", "NUM_THREADS=ALL_CPUS"
-                ]
-
-                subprocess.run(cmd)
-                print(f"🏁 Finished {rel_path}")
-        finally:
-            if conversion_src == mean_tmp and mean_tmp.exists():
-                mean_tmp.unlink()
+        print(f"🛠️  Optimizing {rel_path}...")
+        if optimize_to_cog(tif, out_file, force=force_rebuild):
+            print(f"🏁 Finished {rel_path}")
+        else:
+            print(f"❌ Failed to optimize {rel_path}")
 
 
 # Configuration

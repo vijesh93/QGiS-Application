@@ -8,7 +8,7 @@ import json
 import rasterio
 from pathlib import Path
 
-from raster_utils import compute_band_range, generate_band_vrts, parse_band_date_convention, prepare_multiband_source
+from raster_utils import compute_band_range, generate_band_vrts, is_stale_timeseries_output, parse_band_date_convention
 
 # ── Paths (work inside container AND on host, Windows or Linux) ──────────────
 # Script lives at:  data/register_layers.py
@@ -63,110 +63,6 @@ def get_raster_metadata(file_path: Path):
         return None
 
 
-def optimize_to_cog(src: Path, dst: Path, force: bool = False) -> bool:
-    """Convert a GeoTIFF to an optimized, tiled GeoTIFF using gdal_translate.
-
-    Multi-band sources (e.g. a daily time series for a year) get a synthetic
-    "mean" band prepended, then every original band is preserved after it —
-    TiTiler's `bidx` tile parameter lets the frontend pick whichever one it
-    wants. A raster that already has a single band passes through unchanged.
-
-    Single-band output uses GDAL's COG driver as before. Multi-band output
-    deliberately does NOT use the COG driver: that driver hardcodes
-    INTERLEAVE=PIXEL, which stores every band's value for a pixel together —
-    so reading just one band out of a 366-band file still means decompressing
-    all 366 bands' worth of data per tile (measured ~1.3-1.5s per tile,
-    enough to make the map feel hung). Instead, multi-band output is built as
-    a classic tiled GeoTIFF with INTERLEAVE=BAND (each band fully separable
-    on disk) plus `gdaladdo` for overviews — functionally equivalent to a COG
-    for TiTiler's purposes, but ~7-10x faster for single-band reads out of a
-    many-band file (measured ~0.15-0.2s per tile after this change).
-
-    If `force` is True, an existing `dst` is deleted and rebuilt instead of
-    being skipped — used to regenerate files produced by an older version of
-    this pipeline (e.g. the old single-band-only squash, or the PIXEL-
-    interleaved multi-band COG from before this fix).
-    """
-    dst.parent.mkdir(parents=True, exist_ok=True)
-    if dst.exists():
-        if not force:
-            print(f"  ↳ Already optimized, skipping conversion: {dst.name}")
-            return True
-        dst.unlink()
-
-    mean_tmp = dst.parent / f"_{dst.stem}.band_mean_tmp.tif"
-    try:
-        conversion_src = prepare_multiband_source(src, mean_tmp)
-    except Exception as e:
-        print(f"❌ Could not read {src.name}, skipping: {e}")
-        return False
-
-    is_multiband = conversion_src == mean_tmp
-
-    try:
-        if is_multiband:
-            subprocess.run([
-                "gdal_translate",
-                "-of", "GTiff",
-                "-co", "TILED=YES",
-                "-co", "BLOCKXSIZE=512",
-                "-co", "BLOCKYSIZE=512",
-                "-co", "INTERLEAVE=BAND",
-                "-co", "COMPRESS=DEFLATE",
-                str(conversion_src), str(dst)
-            ], check=True, capture_output=True)
-            subprocess.run([
-                "gdaladdo", "-r", "average", str(dst), "2", "4", "8"
-            ], check=True, capture_output=True)
-        else:
-            subprocess.run([
-                "gdal_translate",
-                "-of", "COG",
-                "-co", "COMPRESS=DEFLATE",
-                "-co", "OVERVIEW_RESAMPLING=AVERAGE",
-                str(conversion_src), str(dst)
-            ], check=True, capture_output=True)
-
-        print(f"  ↳ Optimized → {dst.name}")
-        return True
-
-    except subprocess.CalledProcessError as e:
-        print(f"❌ COG conversion failed for {src.name}: {e.stderr}")
-        return False
-    finally:
-        if conversion_src == mean_tmp and mean_tmp.exists():
-            mean_tmp.unlink()
-
-
-def _is_stale_timeseries_output(src: Path, optimized: Path) -> bool:
-    """True if an already-optimized file needs rebuilding because `src` is a
-    genuine multi-band (time-series) source but `optimized` doesn't reflect
-    the current pipeline shape — either it's still the old single-mean-band
-    squash (band count doesn't match src's real band count + 1), or it's
-    multi-band but still PIXEL-interleaved (the COG driver's hardcoded
-    layout, which makes reading one band out of many require decompressing
-    all of them — see optimize_to_cog's docstring).
-
-    Single-band sources are NEVER flagged here: an optimized single-band
-    file's band count (1) is indistinguishable from the old pre-feature
-    squash output on its own, so staleness only makes sense relative to the
-    source's own band count, not the optimized file in isolation.
-    """
-    if not optimized.exists():
-        return False
-    try:
-        with rasterio.open(src) as src_ds:
-            src_band_count = src_ds.count
-        if src_band_count <= 1:
-            return False  # static raster — never subject to the time-series shape
-        with rasterio.open(optimized) as ds:
-            if ds.count != src_band_count + 1:
-                return True
-            return ds.tags(ns="IMAGE_STRUCTURE").get("INTERLEAVE") != "BAND"
-    except Exception:
-        return True
-
-
 def register_rasters():
     tifs = list(RASTER_DIR.rglob("*.tif"))
     if not tifs:
@@ -188,13 +84,24 @@ def register_rasters():
         optimized = OPTIMIZED_DIR / rel_path
         print(f"▶ Processing: {rel_path}")
 
-        # Step 1: Convert to COG into Optimized_Raster/<category>/. Source
-        # rasters with more than one real band are only ever squashed to the
-        # old single/mean-only shape by an earlier version of this pipeline —
-        # force a rebuild so they get the full band stack instead. Single-band
-        # sources are never flagged, so aspect/etc. are left alone (fast).
-        force_rebuild = _is_stale_timeseries_output(tif, optimized)
-        if not optimize_to_cog(tif, optimized, force=force_rebuild):
+        # Step 1: Verify this raster is already properly optimized —
+        # registration never does conversion work itself (that's
+        # cog_optimizer.py's job, via raster_utils.optimize_to_cog). A file
+        # that's missing or stale gets skipped, not silently (re)built here:
+        # doing the conversion inline used to make `register_layers.py`
+        # redo the heaviest part of the pipeline on every run (and, on
+        # memory-constrained machines, was a real cause of it getting
+        # OOM-killed) — and registering an unoptimized/stale raster's
+        # metadata would be actively wrong (e.g. a `bidx`/VRT band layout
+        # that doesn't match what's actually on disk).
+        if not optimized.exists():
+            print(f"⚠️  Skipping {rel_path}: not optimized yet — run the optimize "
+                  f"step first (cog_optimizer.py, or setup_layers.py without --skip-optimize).")
+            skipped += 1
+            continue
+        if is_stale_timeseries_output(tif, optimized):
+            print(f"⚠️  Skipping {rel_path}: optimized file is stale (doesn't match "
+                  f"the source's band layout) — re-run the optimize step.")
             skipped += 1
             continue
 

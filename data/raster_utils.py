@@ -102,33 +102,169 @@ def prepare_multiband_source(src: Path, tmp_path: Path) -> Path:
     band 2. The caller owns `tmp_path` and is responsible for deleting it
     once conversion is done — compare the return value against `tmp_path` to
     know whether a temporary file was actually created.
+
+    Streams one band at a time (two passes over `src`: one to accumulate the
+    mean, one to copy bands through) rather than loading every band into
+    memory at once — a many-band file (e.g. 366 daily bands) previously had
+    to fit entirely in RAM simultaneously as a masked array, which could use
+    several hundred MB to multiple GB for one file and was a real cause of
+    the pipeline getting OOM-killed on memory-constrained machines. Peak
+    memory here is roughly one band plus two single-band accumulator arrays,
+    regardless of how many bands the file has.
     """
     with rasterio.open(src) as ds:
         if ds.count <= 1:
             return src
 
-        data = ds.read(masked=True)
-        mean = data.mean(axis=0, dtype="float64").astype("float32")
-
         nodata = ds.nodata if ds.nodata is not None else float("nan")
-        mean_filled = np.ma.filled(mean, nodata)
+
+        # Pass 1: nodata-aware running sum + valid-pixel count, one band at
+        # a time — equivalent to the old masked `data.mean(axis=0)` but
+        # without ever holding more than one band in memory.
+        sum_ = np.zeros((ds.height, ds.width), dtype="float64")
+        count = np.zeros((ds.height, ds.width), dtype="int32")
+        for b in range(1, ds.count + 1):
+            band = ds.read(b, masked=True)
+            sum_ += np.ma.filled(band, 0.0).astype("float64")
+            count += (~np.ma.getmaskarray(band)).astype("int32")
+
+        with np.errstate(invalid="ignore", divide="ignore"):
+            mean = np.where(count > 0, sum_ / count, nodata).astype("float32")
 
         profile = ds.profile.copy()
         profile.update(driver="GTiff", count=ds.count + 1, dtype="float32", nodata=nodata)
 
         tmp_path.parent.mkdir(parents=True, exist_ok=True)
+        descriptions = ds.descriptions
         with rasterio.open(tmp_path, "w", **profile) as out:
-            out.write(mean_filled, 1)
+            out.write(mean, 1)
             out.set_band_description(1, "mean")
 
-            descriptions = ds.descriptions
+            # Pass 2: copy each source band straight through to its output
+            # slot, one band at a time.
             for i in range(1, ds.count + 1):
-                band_filled = np.ma.filled(data[i - 1], nodata)
+                band = ds.read(i, masked=True)
+                band_filled = np.ma.filled(band, nodata)
                 out.write(band_filled, i + 1)
                 if descriptions[i - 1]:
                     out.set_band_description(i + 1, descriptions[i - 1])
 
     return tmp_path
+
+
+def optimize_to_cog(src: Path, dst: Path, force: bool = False) -> bool:
+    """Convert a GeoTIFF to an optimized, tiled GeoTIFF using gdal_translate.
+
+    Multi-band sources (e.g. a daily time series for a year) get a synthetic
+    "mean" band prepended, then every original band is preserved after it —
+    TiTiler's `bidx` tile parameter lets the frontend pick whichever one it
+    wants. A raster that already has a single band passes through unchanged.
+
+    Single-band output uses GDAL's COG driver as before. Multi-band output
+    deliberately does NOT use the COG driver: that driver hardcodes
+    INTERLEAVE=PIXEL, which stores every band's value for a pixel together —
+    so reading just one band out of a 366-band file still means decompressing
+    all 366 bands' worth of data per tile (measured ~1.3-1.5s per tile,
+    enough to make the map feel hung). Instead, multi-band output is built as
+    a classic tiled GeoTIFF with INTERLEAVE=BAND (each band fully separable
+    on disk) plus `gdaladdo` for overviews — functionally equivalent to a COG
+    for TiTiler's purposes, but ~7-10x faster for single-band reads out of a
+    many-band file (measured ~0.15-0.2s per tile after this change).
+
+    If `force` is True, an existing `dst` is deleted and rebuilt instead of
+    being skipped — used to regenerate files produced by an older version of
+    this pipeline (e.g. the old single-band-only squash, or the PIXEL-
+    interleaved multi-band COG from before this fix).
+
+    This is the one place raw→optimized conversion happens — both
+    `cog_optimizer.py` (the pipeline's dedicated optimize step) and anything
+    else that needs to (re)produce an optimized file call this, rather than
+    each keeping its own copy of the conversion logic (two copies is how the
+    `INTERLEAVE=PIXEL` bug above ended up fixed in one place and not the
+    other for a while).
+    """
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    if dst.exists():
+        if not force:
+            print(f"  ↳ Already optimized, skipping conversion: {dst.name}")
+            return True
+        dst.unlink()
+
+    mean_tmp = dst.parent / f"_{dst.stem}.band_mean_tmp.tif"
+    try:
+        conversion_src = prepare_multiband_source(src, mean_tmp)
+    except Exception as e:
+        print(f"❌ Could not read {src.name}, skipping: {e}")
+        return False
+
+    is_multiband = conversion_src == mean_tmp
+
+    try:
+        if is_multiband:
+            subprocess.run([
+                "gdal_translate",
+                "-of", "GTiff",
+                "-co", "TILED=YES",
+                "-co", "BLOCKXSIZE=512",
+                "-co", "BLOCKYSIZE=512",
+                "-co", "INTERLEAVE=BAND",
+                "-co", "COMPRESS=DEFLATE",
+                str(conversion_src), str(dst)
+            ], check=True, capture_output=True)
+            subprocess.run([
+                "gdaladdo", "-r", "average", str(dst), "2", "4", "8"
+            ], check=True, capture_output=True)
+        else:
+            subprocess.run([
+                "gdal_translate",
+                "-of", "COG",
+                "-co", "COMPRESS=DEFLATE",
+                "-co", "OVERVIEW_RESAMPLING=AVERAGE",
+                str(conversion_src), str(dst)
+            ], check=True, capture_output=True)
+
+        print(f"  ↳ Optimized → {dst.name}")
+        return True
+
+    except subprocess.CalledProcessError as e:
+        print(f"❌ COG conversion failed for {src.name}: {e.stderr}")
+        return False
+    finally:
+        if conversion_src == mean_tmp and mean_tmp.exists():
+            mean_tmp.unlink()
+
+
+def is_stale_timeseries_output(src: Path, optimized: Path) -> bool:
+    """True if an already-optimized file needs rebuilding because `src` is a
+    genuine multi-band (time-series) source but `optimized` doesn't reflect
+    the current pipeline shape — either it's still the old single-mean-band
+    squash (band count doesn't match src's real band count + 1), or it's
+    multi-band but still PIXEL-interleaved (the COG driver's hardcoded
+    layout, which makes reading one band out of many require decompressing
+    all of them — see optimize_to_cog's docstring).
+
+    Single-band sources are NEVER flagged here: an optimized single-band
+    file's band count (1) is indistinguishable from the old pre-feature
+    squash output on its own, so staleness only makes sense relative to the
+    source's own band count, not the optimized file in isolation.
+
+    Also used by `register_layers.py` to decide whether an already-present
+    optimized file is actually safe to register as-is, or should be skipped
+    (not silently re-optimized) when the optimize step was never run.
+    """
+    if not optimized.exists():
+        return False
+    try:
+        with rasterio.open(src) as src_ds:
+            src_band_count = src_ds.count
+        if src_band_count <= 1:
+            return False  # static raster — never subject to the time-series shape
+        with rasterio.open(optimized) as ds:
+            if ds.count != src_band_count + 1:
+                return True
+            return ds.tags(ns="IMAGE_STRUCTURE").get("INTERLEAVE") != "BAND"
+    except Exception:
+        return True
 
 
 _VRT_ABS_SOURCE_RE = re.compile(r'<SourceFilename relativeToVRT="0">[^<]*</SourceFilename>')
