@@ -11,7 +11,7 @@ import json
 from pathlib import Path
 import requests
 
-from raster_utils import prepare_single_band_source
+from raster_utils import prepare_multiband_source
 
 
 RAW_DIR = Path("data_files/Raster")
@@ -57,12 +57,12 @@ def optimize():
             print(f"⏩ Skipping {rel_path}, optimized version already exists.")
             continue
 
-        # Multi-band sources (e.g. a daily time series for a year) are
-        # collapsed to a single band (annual mean) before COG conversion.
-        # Rasters that already have a single band pass through unchanged.
+        # Multi-band sources (e.g. a daily time series for a year) get a
+        # synthetic mean band prepended ahead of the real bands. Rasters
+        # that already have a single band pass through unchanged.
         mean_tmp = out_file.parent / f"_{out_file.stem}.band_mean_tmp.tif"
         try:
-            conversion_src = prepare_single_band_source(tif, mean_tmp)
+            conversion_src = prepare_multiband_source(tif, mean_tmp)
         except Exception as e:
             print(f"❌ Could not read {rel_path}, skipping: {e}")
             continue
