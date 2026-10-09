@@ -35,17 +35,28 @@ def compute_band_range(path: Path) -> Optional[Tuple[float, float]]:
     just band 1) keeps this range valid, and the color scale stable, no
     matter which band/timestep a user has scrubbed to. Returns None if the
     raster has no valid (non-nodata) pixels at all.
+
+    Accumulated one tile at a time rather than one whole band at a time: a
+    full-band read of a 1KM raster (43200x14400 float32) allocates ~2.5 GB
+    for the data, ~0.6 GB more for the mask, and as much again to extract
+    the valid values via `.compressed()` — enough for the OOM killer to
+    SIGKILL the process inside the data-loader container (surfacing as
+    "exited with code -9"), independent of band count — a single-band file
+    at this resolution hits it on its own, which a per-band (not per-tile)
+    loop can't help with. Blockwise accumulation via `ds.block_windows()`
+    yields exactly the same min/max but never holds more than one tile
+    (e.g. 512x512) in memory, regardless of the raster's overall dimensions.
     """
     with rasterio.open(path) as ds:
         band_min, band_max = None, None
         for b in range(1, ds.count + 1):
-            data = ds.read(b, masked=True)
-            valid = data.compressed()
-            if valid.size == 0:
-                continue
-            lo, hi = float(valid.min()), float(valid.max())
-            band_min = lo if band_min is None else min(band_min, lo)
-            band_max = hi if band_max is None else max(band_max, hi)
+            for _, window in ds.block_windows(b):
+                block = ds.read(b, window=window, masked=True)
+                if block.count() == 0:
+                    continue
+                lo, hi = float(block.min()), float(block.max())
+                band_min = lo if band_min is None else min(band_min, lo)
+                band_max = hi if band_max is None else max(band_max, hi)
         if band_min is None:
             return None
         return band_min, band_max
