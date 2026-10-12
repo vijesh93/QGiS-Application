@@ -1,3 +1,5 @@
+import os
+
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from sqlmodel import SQLModel
@@ -8,13 +10,21 @@ from fastapi.middleware.cors import CORSMiddleware
 from api.v1.layers import router as layers_router
 
 
-# Define allowed origins (Frontend URL)
-origins = [
+# Allowed origins (Frontend URL). In production this is set via the CORS_ORIGINS
+# env var (comma-separated); falls back to the local dev origins when unset so
+# local docker-compose.dev.yml usage is unaffected.
+_default_origins = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "http://localhost:5500",
     "http://127.0.0.1:5500",
 ]
+_env_origins = os.getenv("CORS_ORIGINS")
+origins = (
+    [origin.strip() for origin in _env_origins.split(",") if origin.strip()]
+    if _env_origins
+    else _default_origins
+)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

@@ -1,0 +1,79 @@
+# Production overlay. Use together with the base file:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build -d
+#
+# Design: exactly ONE container port is published to the host (gateway, bound to
+# 127.0.0.1 only) — everything else stays on the internal gis-network. A host-level
+# nginx (installed directly on the server, not in Docker) is the only thing with a
+# port open to the internet, and it proxies to the gateway's 127.0.0.1 port. See
+# docs/deployment_plan.md for the full picture and how to add another app this way.
+
+services:
+  db:
+    restart: unless-stopped
+
+  redis:
+    restart: unless-stopped
+
+  raster-server:
+    restart: unless-stopped
+
+  backend:
+    restart: unless-stopped
+    environment:
+      CORS_ORIGINS: ${PUBLIC_APP_URL}
+
+  gateway:
+    build:
+      context: .
+      dockerfile: nginx/Dockerfile
+      args:
+        HTTP_PROXY: ${HTTP_PROXY}
+        HTTPS_PROXY: ${HTTPS_PROXY}
+        NO_PROXY: ${NO_PROXY}
+    container_name: geoportal-gateway
+    restart: unless-stopped
+    depends_on:
+      - backend
+      - raster-server
+    ports:
+      - "127.0.0.1:${APP_GATEWAY_PORT}:80"
+    networks:
+      - gis-network
+
+  # One-shot pipeline/registration tool — not part of the always-up stack.
+  # Run on demand, e.g.:
+  #   docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+  #     run --rm data-loader python setup_layers.py --skip-download --skip-optimize --only-register
+  data-loader:
+    build:
+      context: ./data
+      args:
+        HTTP_PROXY: ${HTTP_PROXY}
+        HTTPS_PROXY: ${HTTPS_PROXY}
+        NO_PROXY: ${NO_PROXY}
+    container_name: geoportal-data-loader
+    volumes:
+      - ./data:/app
+      - ./backend:/backend_src
+    environment:
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD_URL}@db:5432/geoportal
+      HTTP_PROXY: ${HTTP_PROXY}
+      HTTPS_PROXY: ${HTTPS_PROXY}
+      NO_PROXY: ${NO_PROXY}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_PASSWORD_URL: ${DB_PASSWORD_URL}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - gis-network
+    # No ports (no Jupyter in prod) and no restart policy — this is a one-shot
+    # tool invoked via `run --rm`, not a long-running service.
+
+  # Unused today (no vector layers yet) — left defined but one can stop it from
+  # being created at all by commenting it out here once it is sure we don't
+  # need it, to save resources:
+  # tileserver:
+  #   deploy:
+  #     replicas: 0
