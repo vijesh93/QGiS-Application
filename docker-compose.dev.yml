@@ -1,4 +1,19 @@
 services:
+  # Dev-only direct host port access to services that are internal-only in
+  # production (docker-compose.yml no longer publishes these) — lets you
+  # curl/psql them straight from the host while developing.
+  db:
+    ports:
+      - "${DB_HOST_PORT}:5432"
+
+  tileserver:
+    ports:
+      - "${TILESERV_HOST_PORT}:7800"
+
+  raster-server:
+    ports:
+      - "${TITILER_HOST_PORT}:80"
+
   backend:
     build:
       context: ./backend
@@ -13,7 +28,6 @@ services:
       - /app/.venv
     ports:
       - "${BACKEND_HOST_PORT}:8000"
-    container_name: qgis-raster-app-geoportal-backend
     environment:
       DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD_URL}@db:5432/geoportal
       HTTP_PROXY: ${HTTP_PROXY}

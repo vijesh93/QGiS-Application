@@ -16,11 +16,12 @@ services:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - gis-network
-    ports:
-      - "${DB_HOST_PORT}:5432"
+    # No host ports published here: in production this is reached only over
+    # gis-network (by backend/raster-server). docker-compose.dev.yml publishes
+    # DB_HOST_PORT for local psql/GUI access.
 
 # tileserv: Ideal for vectors (Strems winds etc)
-  tileserver: # TODO: IMPORTANT: Check: Probably need to replace/extend this with pg_titiler 
+  tileserver: # TODO: IMPORTANT: Check: Probably need to replace/extend this with pg_titiler
     image: pramsey/pg_tileserv:latest # Or neteler/postgis-t-rex # Or crunchydata/pg_tileserv
     container_name: geoportal-tileserver
     environment:
@@ -34,8 +35,7 @@ services:
         condition: service_healthy # Waits for healthcheck to pass
     networks:
       - gis-network
-    ports:
-      - "${TILESERV_HOST_PORT}:7800"
+    # No host ports published here (see note on db above); dev override adds them.
 
   # The "Brain" for caching
   redis:
@@ -70,10 +70,9 @@ services:
       TITILER_CACHE_EXPIRE: 86400
     volumes:
       - ./data:/data
-    ports:
-      - "${TITILER_HOST_PORT}:80"
     networks:
       - gis-network
+    # No host ports published here (see note on db above); dev override adds them.
 
   backend:
     build:

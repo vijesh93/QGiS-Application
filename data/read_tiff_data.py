@@ -114,3 +114,5 @@ if __name__ == "__main__":
         # Coordinate Lookup: What is the GPS coord of the top-left pixel?
         lon, lat = src.xy(0, 0) # (row 0, col 0)
         print(f"\nCoordinate of pixel [0,0]: {lon}, {lat}")
+
+        28774
