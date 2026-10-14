@@ -1,0 +1,70 @@
+# Host-level nginx template — this file lives on the SERVER at
+# /etc/nginx/sites-available/<app-name>.conf, NOT inside any Docker container.
+# It is the one piece of config that makes "many apps, one server" work: every
+# app gets one of these blocks, each pointing at that app's own gateway port.
+#
+# This copy in the repo (deploy/host-nginx-app.conf.example) is just the
+# template/reference — copy it to the server and fill in the placeholders.
+# See docs/deployment_plan.md for the full explanation and the "add another
+# app" checklist.
+#
+# Placeholders to replace:
+#   APP_PUBLIC_PORT   - the port this app is reached on from the internet, e.g. 8081
+#                        (pick a new, unused one for each app)
+#   APP_GATEWAY_PORT  - the 127.0.0.1-only port this app's "gateway" container
+#                        publishes (matches APP_GATEWAY_PORT in that app's .env)
+
+server {
+    listen APP_PUBLIC_PORT;
+    server_name _;
+
+    location / {
+        proxy_pass http://127.0.0.1:APP_GATEWAY_PORT;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+
+# --- Install on the server ---
+#   sudo cp this-file /etc/nginx/sites-available/<app-name>.conf
+#   sudo ln -s /etc/nginx/sites-available/<app-name>.conf /etc/nginx/sites-enabled/
+#   sudo nginx -t && sudo systemctl reload nginx
+#   sudo ufw allow APP_PUBLIC_PORT/tcp
+#
+# --- Once a domain exists for this app (later) ---
+#   Change to:
+#     listen 80;
+#     server_name yourapp.yourdomain.com;
+#   (proxy_pass line stays exactly the same — Docker side never changes)
+#   Then: sudo certbot --nginx -d yourapp.yourdomain.com
+
+
+"""
+/btw what are now todos for deployement for the app
+                                                                                                                                                               commits/pushes were made, and no server has been touched. Remaining todos:
+
+      Not yet committed
+      - None of the file changes (docker-compose.yml, docker-compose.dev.yml, docker-compose.prod.yml, nginx/Dockerfile, nginx/default.conf, backend/main.py, .env.example, deploy/host-nginx-app.conf.example, docs/deployment_plan.md) have been committed to git — that's a prerequisite before pushing/pulling on the server.
+
+      On the actual server (none of this has happened yet)
+      - Server hardening: apt update/upgrade, ufw default-deny setup, fail2ban install.
+      - git clone the repo onto the server.
+      - Create the real .env from .env.example with a freshly generated DB_PASSWORD (the current dev .env password was exposed in session logs during exploration and shouldn't be reused), plus PUBLIC_APP_URL and APP_GATEWAY_PORT.
+      - ufw allow the app's chosen public port.
+      - docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build -d and confirm all containers report healthy.
+      - Install the host-level nginx block: copy deploy/host-nginx-app.conf.example to /etc/nginx/sites-available/, fill in the real port placeholders, symlink to sites-enabled/, nginx -t, reload.
+
+      Data
+      - The real dataset hasn't arrived yet (still trial data) — once it does: re-run the local pipeline, rsync data/data_files/ to the server, then run the data-loader with --skip-download --skip-optimize --only-register on the server to populate the DB.
+
+      Verification (not yet performed)
+      - No real browser test has been done against the new gateway nginx setup — need to confirm the rebuilt frontend actually requests tiles via the relative /titiler/... path (not a stale absolute localhost:8080 URL) and that /api/v1/layers resolves through the proxy.
+      - Confirm via ufw status / ss -tulpn on the server that only the intended port is reachable.
+
+      Deferred by earlier decision, not urgent
+      - Domain DNS record and certbot TLS setup — explicitly planned for later, once a domain exists.
+      - Deciding whether to disable the unused tileserver (pg_tileserv) service in prod to save resources — left as an optional, uncommitted-to decision.
+      - Setting up the nightly pg_dump backup cron job mentioned in the docs — documented but not actually scripted/installed anywhere.
+"""
