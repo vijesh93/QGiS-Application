@@ -23,3 +23,8 @@ dist/
 
 # Old files folders
 *_old/
+
+# Local-only deployment notes (real server IP/ports, not for the public repo)
+server-hosting-notes.txt
+deployment-report.txt
+apps-readme-server-copy.txt
