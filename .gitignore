@@ -44,3 +44,8 @@ frontend/public/BaWue_Logo_Flag_rgb.svg
 # org-specific, not for the public repo. Copy legal.example.json to
 # legal.json and fill in the real values (see README's Quick Start).
 frontend/src/config/legal.json
+
+# Local-only deployment notes (real server IP/ports, not for the public repo)
+server-hosting-notes.txt
+deployment-report.txt
+apps-readme-server-copy.txt
