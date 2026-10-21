@@ -1,0 +1,12 @@
+.git
+**/node_modules
+**/dist
+data/data_files
+postgres_data
+__pycache__
+**/*.pyc
+.venv
+*.Tif
+*.tif
+*.Tiff
+*.tiff

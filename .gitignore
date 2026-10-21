@@ -24,7 +24,18 @@ dist/
 # Old files folders
 *_old/
 
-# Local-only deployment notes (real server IP/ports, not for the public repo)
-server-hosting-notes.txt
+# Local-only deployment notes (real server IPs, domains, port assignments)
+# server-hosting-notes.txt now lives outside this repo (one level up, in
+# D:\Web_Apps_Vijesh_LAZBW_Apps\ — it covers all apps on the server, not
+# just this one), so it no longer needs an entry here.
 deployment-report.txt
-apps-readme-server-copy.txt
+docs/deployment_changes_reference.md
+docs/temp.md
+
+# Licensed/restricted BW corporate-design assets — must NOT be redistributed
+# via this public repo (webfonts: Luzi Type metered commercial license, see
+# the license note in frontend/src/styles/index.css; logo: official state
+# asset from the login-gated design.landbw.de portal). Deploy these to the
+# server separately — see docs/licensed-assets-deployment.md.
+frontend/public/fonts/
+frontend/public/BaWue_Logo_Flag_rgb.svg
