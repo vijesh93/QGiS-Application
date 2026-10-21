@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Layers, Settings2, Search, X, ChevronDown, ChevronLeft, Eye, EyeOff } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Settings2, Search, X, ChevronDown, ChevronLeft, Eye, EyeOff } from 'lucide-react';
+import { APP_TITLE } from '../constants/brand';
 
 // One accent colour per category, cycling if there are more than 8 categories
 const CATEGORY_COLORS = [
@@ -57,7 +59,7 @@ const Sidebar = ({
   const commitMasterTime = (e) => onMasterTimeChange(Number(e.target.value));
 
   return (
-    <aside className={`${collapsed ? 'w-12' : 'w-80'} relative transition-all duration-300 ease-in-out bg-slate-900 text-slate-100 h-screen flex flex-col shadow-xl z-10 flex-shrink-0`}>
+    <aside className={`${collapsed ? 'w-12' : 'w-80'} relative transition-all duration-300 ease-in-out bg-bawu-schwarz text-white font-bawu-sans h-full flex flex-col shadow-xl z-10 flex-shrink-0`}>
 
       {/* ── Collapse/expand toggle — always rendered, rides the aside's own
            width transition so it ends up pinned to the screen's left edge
@@ -66,7 +68,7 @@ const Sidebar = ({
         onClick={onToggleCollapsed}
         aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-        className="absolute -right-3 top-1/2 -translate-y-1/2 z-20 flex items-center justify-center w-7 h-7 rounded-full bg-slate-700 hover:bg-slate-600 border border-slate-600 shadow-lg"
+        className="absolute -right-3 top-1/2 -translate-y-1/2 z-20 flex items-center justify-center w-7 h-7 rounded-full bg-bawu-grau-5 hover:bg-bawu-grau-4 border border-bawu-grau-5 shadow-lg"
       >
         <ChevronLeft size={16} className={`transition-transform ${collapsed ? 'rotate-180' : ''}`} />
       </button>
@@ -74,40 +76,45 @@ const Sidebar = ({
       {!collapsed && (
       <>
       {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="p-5 border-b border-slate-700 flex items-center justify-between">
+      <div className="p-5 border-b border-bawu-grau-5 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Layers className="text-blue-400" size={20} />
-          <h1 className="text-lg font-bold tracking-tight">BW Geoportal</h1>
+          <img
+            src="/BaWue_Logo_Flag_rgb.svg"
+            alt="Land Baden-Württemberg"
+            className="h-8 w-auto flex-shrink-0"
+            onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = '/logo-placeholder.svg'; }}
+          />
+          <h1 className="text-lg font-bold tracking-tight">{APP_TITLE}</h1>
         </div>
         {/* Total raster count badge */}
         {rasterCount !== null && (
           <div className="flex flex-col items-end leading-none">
-            <span className="text-blue-400 font-mono font-bold text-sm">
+            <span className="text-bawu-gelb font-mono font-bold text-sm">
               {rasterCount.toLocaleString()}
             </span>
-            <span className="text-slate-500 text-xs uppercase tracking-widest">layers</span>
+            <span className="text-bawu-grau-4 text-xs uppercase tracking-widest">layers</span>
           </div>
         )}
       </div>
       
       {/* ── Base Map Controls (your existing slider) ───────────────────── */}
-      <div className="p-5 border-b border-slate-800">
-        <div className="flex items-center gap-2 mb-3 text-slate-400">
+      <div className="p-5 border-b border-bawu-grau-6">
+        <div className="flex items-center gap-2 mb-3 text-bawu-grau-3">
           <Settings2 size={15} />
           <span className="text-xs font-semibold uppercase tracking-wider">Map Controls</span>
         </div>
-        <div className="bg-slate-800 p-4 rounded-lg border border-slate-700">
+        <div className="bg-bawu-grau-6 p-4 rounded-lg border border-bawu-grau-5">
           <label className="block text-sm font-medium mb-3">
             Base Map Transparency
           </label>
           <input
             type="range"
-            className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+            className="w-full h-2 bg-bawu-grau-5 rounded-lg appearance-none cursor-pointer accent-bawu-gelb"
             min="0" max="100"
             value={BaseMapTransparency}
             onChange={(e) => setBaseMapTransparency(Number(e.target.value))}
           />
-          <div className="flex justify-between text-xs text-slate-500 mt-2 font-mono">
+          <div className="flex justify-between text-xs text-bawu-grau-4 mt-2 font-mono">
             <span>0%</span>
             <span>{BaseMapTransparency}%</span>
             <span>100%</span>
@@ -115,13 +122,13 @@ const Sidebar = ({
         </div>
 
         {/* Master time control — moves every active time-series layer at once. */}
-        <div className="bg-slate-800 p-4 rounded-lg border border-slate-700 mt-3">
+        <div className="bg-bawu-grau-6 p-4 rounded-lg border border-bawu-grau-5 mt-3">
           <label className="block text-sm font-medium mb-3">
             Time Position
           </label>
           <input
             type="range"
-            className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+            className="w-full h-2 bg-bawu-grau-5 rounded-lg appearance-none cursor-pointer accent-bawu-gelb"
             min="0" max="100"
             value={dragTimePct}
             onChange={(e) => setDragTimePct(Number(e.target.value))}
@@ -129,12 +136,12 @@ const Sidebar = ({
             onTouchEnd={commitMasterTime}
             onKeyUp={commitMasterTime}
           />
-          <div className="flex justify-between text-xs text-slate-500 mt-2 font-mono">
+          <div className="flex justify-between text-xs text-bawu-grau-4 mt-2 font-mono">
             <span>Mean</span>
             <span>{dragTimePct}%</span>
             <span>Latest</span>
           </div>
-          <p className="text-[11px] text-slate-500 mt-2 leading-snug">
+          <p className="text-[11px] text-bawu-grau-4 mt-2 leading-snug">
             Scrubs every active multi-band layer to the same relative position in
             its own time range. Layers without multiple timesteps are unaffected.
           </p>
@@ -142,20 +149,22 @@ const Sidebar = ({
       </div>
 
       {/* Search bar */}
-      <div className="px-4 py-3 border-b border-slate-800">
-        <div className="flex items-center gap-2 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500/20">
-          <Search size={13} className="text-slate-500 flex-shrink-0" />
+      <div className="px-4 py-3 border-b border-bawu-grau-6">
+        <div className="flex items-center gap-2 bg-bawu-grau-6 border border-bawu-grau-5 rounded-lg px-3 py-2 focus-within:border-bawu-gelb focus-within:ring-1 focus-within:ring-bawu-gelb/20">
+          <Search size={13} className="text-bawu-grau-4 flex-shrink-0" />
           <input
             type="text"
             placeholder="Search layers…"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="flex-1 bg-transparent border-none outline-none text-sm text-slate-200 placeholder-slate-500"
+            className="flex-1 bg-transparent border-none outline-none text-sm text-white placeholder-bawu-grau-4"
           />
           {searchQuery && (
             <button
               onClick={() => setSearchQuery('')}
-              className="text-slate-500 hover:text-slate-300 text-base leading-none"
+              aria-label="Suche löschen"
+              title="Suche löschen"
+              className="text-bawu-grau-4 hover:text-bawu-grau-2 text-base leading-none"
             >
               <X size={14} />
             </button>
@@ -165,15 +174,15 @@ const Sidebar = ({
       <div>
         {/* Active layers summary bar */}
           {activeCount > -1 && (
-            <div className="flex items-center gap-2 px-4 py-2 bg-blue-950/40 border-b border-slate-800">
+            <div className="flex items-center gap-2 px-4 py-2 bg-bawu-grau-6/50 border-b border-bawu-grau-6">
               {/* Animated pulse dot */}
-              <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse flex-shrink-0" />
-              <span className="text-xs text-slate-400 flex-1">
+              <span className="w-2 h-2 rounded-full bg-bawu-gelb animate-pulse flex-shrink-0" />
+              <span className="text-xs text-bawu-grau-3 flex-1">
                 {activeCount} active layer{activeCount !== 1 ? 's' : ''}
               </span>
               <button
                 onClick={clearAllLayers}
-                className="text-xs text-slate-500 border border-slate-700 rounded px-2 py-0.5 hover:border-red-500 hover:text-red-400 transition-colors"
+                className="text-xs text-bawu-grau-4 border border-bawu-grau-5 rounded px-2 py-0.5 hover:border-bawu-fehler-hell hover:text-bawu-fehler-hell transition-colors"
               >
                 Clear all
               </button>
@@ -190,22 +199,22 @@ const Sidebar = ({
           {/* Active layers summary bar */}
           {/* Loading state */}
           {loading && (
-            <div className="flex items-center gap-3 px-4 py-6 text-slate-500 text-sm">
-              <div className="w-4 h-4 border-2 border-slate-700 border-t-blue-400 rounded-full animate-spin flex-shrink-0" />
+            <div className="flex items-center gap-3 px-4 py-6 text-bawu-grau-4 text-sm">
+              <div className="w-4 h-4 border-2 border-bawu-grau-5 border-t-bawu-gelb rounded-full animate-spin flex-shrink-0" />
               Loading layers…
             </div>
           )}
 
           {/* Error / offline notice */}
           {error && !loading && (
-            <div className="flex items-center gap-2 px-4 py-2 text-amber-400 text-xs border-b border-slate-800 bg-amber-950/20">
+            <div className="flex items-center gap-2 px-4 py-2 text-bawu-orange-hell text-xs border-b border-bawu-grau-6 bg-bawu-orange-dunkel/20">
               <span>⚠</span> Backend unavailable — showing demo data
             </div>
           )}
 
           {/* Empty search result */}
           {!loading && Object.keys(groupedLayers).length === 0 && (
-            <p className="px-4 py-6 text-sm text-slate-500 text-center">
+            <p className="px-4 py-6 text-sm text-bawu-grau-4 text-center">
               No layers match your search.
             </p>
           )}
@@ -239,10 +248,23 @@ const Sidebar = ({
       </div>
 
       {/* ── Footer ─────────────────────────────────────────────────────────── */}
-      <div className="px-4 py-3 border-t border-slate-800 flex gap-2 text-xs text-slate-600 font-mono">
-        <span>Baden-Württemberg Geoportal</span>
-        <span>·</span>
-        <span>© {new Date().getFullYear()}</span>
+      <div className="px-4 py-3 border-t border-bawu-grau-6 flex flex-col gap-1.5 text-xs text-bawu-grau-4">
+        <div className="flex gap-2 font-mono">
+          <span>{APP_TITLE}</span>
+          <span>·</span>
+          <span>© {new Date().getFullYear()}</span>
+        </div>
+        <nav aria-label="Rechtliche Seiten" className="flex gap-3">
+          <Link to="/impressum" className="hover:text-bawu-grau-2 hover:underline">
+            Impressum
+          </Link>
+          <Link to="/datenschutz" className="hover:text-bawu-grau-2 hover:underline">
+            Datenschutz
+          </Link>
+          <Link to="/barrierefreiheit" className="hover:text-bawu-grau-2 hover:underline">
+            Barrierefreiheit
+          </Link>
+        </nav>
       </div>
       </>
       )}
@@ -260,22 +282,22 @@ function CategorySection({
   onToggleCategory, onToggleLayer, onSetOpacity,
 }) {
   return (
-    <div className="border-b border-slate-800">
+    <div className="border-b border-bawu-grau-6">
       {/* Category header button */}
       <button
         onClick={onToggleCategory}
-        className="w-full flex items-center gap-2 px-4 py-2.5 text-left hover:bg-slate-800/60 transition-colors group"
+        className="w-full flex items-center gap-2 px-4 py-2.5 text-left hover:bg-bawu-grau-6/60 transition-colors group"
       >
         {/* Coloured accent bar */}
         <span
           className="w-0.5 h-4 rounded-full flex-shrink-0"
           style={{ background: color }}
         />
-        <span className="flex-1 text-xs font-semibold uppercase tracking-wider text-slate-400 group-hover:text-slate-200 transition-colors">
+        <span className="flex-1 text-xs font-semibold uppercase tracking-wider text-bawu-grau-3 group-hover:text-white transition-colors">
           {category}
         </span>
         {/* Active layer dot + count */}
-        <span className="flex items-center gap-1 text-xs font-mono text-slate-500">
+        <span className="flex items-center gap-1 text-xs font-mono text-bawu-grau-4">
           {activeInCat > 0 && (
             <span
               className="w-1.5 h-1.5 rounded-full animate-pulse"
@@ -287,7 +309,7 @@ function CategorySection({
         {/* Chevron */}
         <ChevronDown
           size={14}
-          className={`text-slate-600 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
+          className={`text-bawu-grau-4 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
         />
       </button>
 
@@ -298,7 +320,7 @@ function CategorySection({
             <div key={subcategory}>
               {/* Subcategory label (only shown if non-empty) */}
               {subcategory && (
-                <div className="px-4 pl-7 pt-2 pb-1 text-xs font-semibold uppercase tracking-widest text-slate-600">
+                <div className="px-4 pl-7 pt-2 pb-1 text-xs font-semibold uppercase tracking-widest text-bawu-grau-4">
                   {subcategory}
                 </div>
               )}
@@ -330,18 +352,20 @@ function LayerRow({ layer, isActive, opacity, accentColor, onToggle, onOpacityCh
   const [opacityOpen, setOpacityOpen] = useState(false);
 
   return (
-    <div className={`transition-colors ${isActive ? 'bg-blue-950/20' : ''}`}>
+    <div className={`transition-colors ${isActive ? 'bg-bawu-grau-6/30' : ''}`}>
       {/* Main row */}
-      <div className="flex items-center gap-2 px-4 pl-7 py-1.5 hover:bg-slate-800/40 group">
+      <div className="flex items-center gap-2 px-4 pl-7 py-1.5 hover:bg-bawu-grau-6/40 group">
 
         {/* Toggle checkbox */}
         <button
           onClick={onToggle}
           title={isActive ? 'Hide layer' : 'Show layer'}
+          aria-label={`${layer.name}: ${isActive ? 'Hide layer' : 'Show layer'}`}
+          aria-pressed={isActive}
           className={`w-4 h-4 rounded flex-shrink-0 border flex items-center justify-center transition-all ${
             isActive
               ? 'border-transparent'
-              : 'border-slate-600 hover:border-slate-400 bg-transparent'
+              : 'border-bawu-grau-5 hover:border-bawu-grau-3 bg-transparent'
           }`}
           style={isActive ? { background: accentColor, boxShadow: `0 0 6px ${accentColor}66` } : {}}
         >
@@ -355,15 +379,15 @@ function LayerRow({ layer, isActive, opacity, accentColor, onToggle, onOpacityCh
 
         {/* Layer name + metadata tags */}
         <div className="flex-1 min-w-0">
-          <span className="text-sm text-slate-300 block truncate">{layer.name}</span>
+          <span className="text-sm text-bawu-grau-2 block truncate">{layer.name}</span>
           <div className="flex gap-1 mt-0.5 flex-wrap">
             {layer.resolution && (
-              <span className="text-slate-600 font-mono text-xs bg-slate-800 border border-slate-700 rounded px-1">
+              <span className="text-bawu-grau-4 font-mono text-xs bg-bawu-grau-6 border border-bawu-grau-5 rounded px-1">
                 {layer.resolution}
               </span>
             )}
             {layer.year && (
-              <span className="text-slate-600 font-mono text-xs bg-slate-800 border border-slate-700 rounded px-1">
+              <span className="text-bawu-grau-4 font-mono text-xs bg-bawu-grau-6 border border-bawu-grau-5 rounded px-1">
                 {layer.year}
               </span>
             )}
@@ -375,10 +399,12 @@ function LayerRow({ layer, isActive, opacity, accentColor, onToggle, onOpacityCh
           <button
             onClick={() => setOpacityOpen(!opacityOpen)}
             title="Adjust opacity"
+            aria-label={`${layer.name}: opacity ${opacityOpen ? 'controls open' : 'controls closed'}, currently ${opacity}%`}
+            aria-expanded={opacityOpen}
             className={`flex items-center gap-1 text-xs font-mono px-1.5 py-0.5 rounded border transition-colors ${
               opacityOpen
-                ? 'border-blue-500 text-blue-400'
-                : 'border-slate-700 text-slate-500 hover:border-slate-500 hover:text-slate-300'
+                ? 'border-bawu-gelb text-bawu-gelb'
+                : 'border-bawu-grau-5 text-bawu-grau-4 hover:border-bawu-grau-3 hover:text-bawu-grau-2'
             }`}
           >
             {opacityOpen ? <EyeOff size={11} /> : <Eye size={11} />}
@@ -389,10 +415,10 @@ function LayerRow({ layer, isActive, opacity, accentColor, onToggle, onOpacityCh
 
       {/* Opacity slider panel — slides open when the eye button is clicked */}
       {isActive && opacityOpen && (
-        <div className="px-4 pl-11 pb-3 bg-slate-950/40 border-t border-slate-800/60">
+        <div className="px-4 pl-11 pb-3 bg-black/30 border-t border-bawu-grau-6/60">
           <div className="pt-2">
             <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-600 font-mono w-6">0%</span>
+              <span className="text-xs text-bawu-grau-4 font-mono w-6">0%</span>
               <input
                 type="range"
                 min="0" max="100" step="5"
@@ -402,10 +428,10 @@ function LayerRow({ layer, isActive, opacity, accentColor, onToggle, onOpacityCh
                 style={{ accentColor: accentColor }}
                 aria-label={`${layer.name} opacity`}
               />
-              <span className="text-xs text-slate-600 font-mono w-8 text-right">100%</span>
+              <span className="text-xs text-bawu-grau-4 font-mono w-8 text-right">100%</span>
             </div>
             {layer.description && (
-              <p className="text-xs text-slate-600 mt-2 leading-relaxed border-t border-slate-800 pt-2">
+              <p className="text-xs text-bawu-grau-4 mt-2 leading-relaxed border-t border-bawu-grau-6 pt-2">
                 {layer.description}
               </p>
             )}

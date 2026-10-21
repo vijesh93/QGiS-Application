@@ -1,6 +1,11 @@
 // components/ActiveLayersLegend.jsx
-// Floating bottom-left overlay — styled to match the dark geoportal theme.
-// Uses inline styles only so no CSS file changes are needed.
+// Floating bottom-left overlay — chrome restyled to the BW palette (see
+// frontend/src/styles/index.css for the token source of truth; these are
+// plain inline styles, not Tailwind classes, so the hex values are repeated
+// here — keep the two in sync if the palette ever changes).
+// CATEGORY_COLORS below is intentionally left untouched: it's the per-layer
+// data-visualization accent, a separate concern from branded chrome — see
+// docs/bw-rebrand-plan.md, item 6.
 
 import React, { useState, useEffect } from 'react';
 
@@ -39,7 +44,7 @@ function TimeSliderRow({ layer, selectedBand, setLayerBand, color }) {
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '5px' }}>
-      <span style={{ fontSize: '10px', color: '#4a6077', width: '16px' }}>⏱</span>
+      <span style={{ fontSize: '10px', color: '#918C8C', width: '16px' }}>⏱</span>
       <input
         type="range"
         min="1" max={layer.bandCount} step="1"
@@ -55,7 +60,7 @@ function TimeSliderRow({ layer, selectedBand, setLayerBand, color }) {
         }}
       />
       <span style={{
-        fontSize: '10px', color: '#8fa3b8',
+        fontSize: '10px', color: '#BBB6B5',
         fontFamily: 'monospace', minWidth: '32px', textAlign: 'right',
         whiteSpace: 'nowrap',
       }}>
@@ -91,12 +96,12 @@ export default function ActiveLayersLegend({
       zIndex:       200,
       minWidth:     '260px',
       maxWidth:     '320px',
-      background:   'rgba(17, 23, 32, 0.96)',
-      border:       '1px solid #1f2d3d',
+      background:   'rgba(42, 38, 35, 0.96)',
+      border:       '1px solid #47403C',
       borderRadius: '10px',
       boxShadow:    '0 8px 32px rgba(0,0,0,0.6)',
       backdropFilter: 'blur(12px)',
-      fontFamily:   "'DM Sans', system-ui, sans-serif",
+      fontFamily:   "'BaWueSansWeb', system-ui, sans-serif",
       overflow:     'hidden',
     }}>
 
@@ -108,8 +113,8 @@ export default function ActiveLayersLegend({
           alignItems:   'center',
           gap:          '8px',
           padding:      '9px 12px',
-          borderBottom: collapsed ? 'none' : '1px solid #1f2d3d',
-          background:   'rgba(22, 29, 40, 0.9)',
+          borderBottom: collapsed ? 'none' : '1px solid #47403C',
+          background:   'rgba(71, 64, 60, 0.9)',
           cursor:       'pointer',
           userSelect:   'none',
         }}
@@ -117,28 +122,28 @@ export default function ActiveLayersLegend({
         {/* Pulsing dot */}
         <span style={{
           width: '7px', height: '7px', borderRadius: '50%',
-          background: '#4FC3F7', flexShrink: 0,
-          boxShadow: '0 0 6px #4FC3F7',
+          background: '#FFFC00', flexShrink: 0,
+          boxShadow: '0 0 6px #FFFC00',
           animation: 'pulse 2s infinite',
         }} />
         <span style={{
           flex: 1, fontSize: '11px', fontWeight: 700,
           letterSpacing: '0.07em', textTransform: 'uppercase',
-          color: '#8fa3b8',
+          color: '#BBB6B5',
         }}>
           Active Layers
         </span>
         <span style={{
           fontSize: '11px', fontWeight: 700,
-          color: '#4FC3F7', fontFamily: 'monospace',
-          background: 'rgba(79,195,247,0.1)',
+          color: '#FFFC00', fontFamily: 'monospace',
+          background: 'rgba(255,252,0,0.15)',
           padding: '1px 7px', borderRadius: '10px',
         }}>
           {activeLayersList.length}
         </span>
         {/* Collapse chevron */}
         <span style={{
-          color: '#4a6077', fontSize: '12px',
+          color: '#918C8C', fontSize: '12px',
           transform: collapsed ? 'rotate(180deg)' : 'rotate(0deg)',
           transition: 'transform 0.2s',
         }}>▲</span>
@@ -155,7 +160,7 @@ export default function ActiveLayersLegend({
                 key={layer.id}
                 style={{
                   padding:    '7px 12px',
-                  borderBottom: '1px solid rgba(31,45,61,0.5)',
+                  borderBottom: '1px solid rgba(71,64,60,0.5)',
                 }}
               >
                 {/* Layer name row */}
@@ -165,7 +170,7 @@ export default function ActiveLayersLegend({
                     background: color, flexShrink: 0,
                   }} />
                   <span style={{
-                    flex: 1, fontSize: '12px', color: '#e2e8f0',
+                    flex: 1, fontSize: '12px', color: '#E4E0E0',
                     whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                   }}>
                     {layer.name}
@@ -176,12 +181,12 @@ export default function ActiveLayersLegend({
                     title={`Hide ${layer.name}`}
                     style={{
                       background: 'none', border: 'none',
-                      color: '#4a6077', fontSize: '18px', lineHeight: 1,
+                      color: '#918C8C', fontSize: '18px', lineHeight: 1,
                       cursor: 'pointer', padding: '0 2px', flexShrink: 0,
                       transition: 'color 0.15s',
                     }}
-                    onMouseEnter={e => e.currentTarget.style.color = '#ef4444'}
-                    onMouseLeave={e => e.currentTarget.style.color = '#4a6077'}
+                    onMouseEnter={e => e.currentTarget.style.color = '#FD4D4D'}
+                    onMouseLeave={e => e.currentTarget.style.color = '#918C8C'}
                   >
                     ×
                   </button>
@@ -189,7 +194,7 @@ export default function ActiveLayersLegend({
 
                 {/* Opacity row */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ fontSize: '10px', color: '#4a6077', width: '16px' }}>
+                  <span style={{ fontSize: '10px', color: '#918C8C', width: '16px' }}>
                     {opacity === 0 ? '○' : '●'}
                   </span>
                   <input
@@ -204,7 +209,7 @@ export default function ActiveLayersLegend({
                     }}
                   />
                   <span style={{
-                    fontSize: '10px', color: '#8fa3b8',
+                    fontSize: '10px', color: '#BBB6B5',
                     fontFamily: 'monospace', width: '32px', textAlign: 'right',
                   }}>
                     {opacity}%

@@ -1,5 +1,132 @@
 @import "tailwindcss";
 
+/* ── Baden-Württemberg corporate design tokens ───────────────────────────────
+   Source: design.landbw.de (public color spec; login required for the
+   licensed BaWue Serif/Sans font files and official logo assets — see
+   docs/bw-rebrand-plan.md). These become Tailwind utilities automatically,
+   e.g. `bg-bawu-gelb`, `text-bawu-schwarz`, `font-bawu-sans`.
+
+   Scope: these tokens are for BRANDED CHROME (header, footer, legal pages)
+   only. The existing dark sidebar/map theme and the per-category layer
+   colors (Sidebar.jsx, ActiveLayersLegend.jsx) are a separate data-
+   visualization concern and are intentionally left unchanged — see
+   docs/bw-rebrand-plan.md, item 6.
+────────────────────────────────────────────────────────────────────────────── */
+@theme {
+  /* Primary (mandatory in nearly all applications per the style guide) */
+  --color-bawu-gelb: #FFFC00;
+  --color-bawu-schwarz: #2A2623;
+
+  /* Grayscale (Grau 1 = lightest … Grau 6 = darkest, plus true black) */
+  --color-bawu-grau-1: #F4F3F3;
+  --color-bawu-grau-2: #E4E0E0;
+  --color-bawu-grau-3: #BBB6B5;
+  --color-bawu-grau-4: #918C8C;
+  --color-bawu-grau-5: #6D6766;
+  --color-bawu-grau-6: #47403C;
+
+  /* Secondary (supplementary use only — e.g. infographics) */
+  --color-bawu-lila-hell: #C761EC;
+  --color-bawu-lila-dunkel: #6B108C;
+  --color-bawu-tuerkis-hell: #309AAF;
+  --color-bawu-tuerkis-dunkel: #094954;
+  --color-bawu-orange-hell: #DD6F06;
+  --color-bawu-orange-dunkel: #6A3201;
+
+  /* Functional (digital-only, fixed semantic meaning — do not repurpose) */
+  --color-bawu-info-hell: #508CF1;
+  --color-bawu-info-dunkel: #0A3C90;
+  --color-bawu-erfolg-hell: #609D0F;
+  --color-bawu-erfolg-dunkel: #2B4904;
+  --color-bawu-fehler-hell: #FD4D4D;
+  --color-bawu-fehler-dunkel: #85100C;
+
+  /* Typography — licensed fonts from design.landbw.de (Luzi Type), now in
+     frontend/public/fonts/. IMPORTANT: this is a METERED web font license —
+     the foundry's own readme states it covers "the overall number of
+     monthly page views stated on your Purchase Receipt." Nobody on this
+     project has that number; whoever holds the purchase receipt should
+     confirm the app's actual traffic stays within it. EULA:
+     https://luzi-type.ch/source/EULA-Web.pdf — see also the per-weight
+     *_ReadMe.html files that originally shipped alongside these fonts.
+
+     Font-weight note: the foundry's own example registers "Regular" at
+     weight 500 (its true design-axis position), but this app deliberately
+     registers it at 400 instead, with SemiBold at 600 and Bold at 700 —
+     standard CSS weight numbers, matching what Tailwind's font-normal/
+     font-semibold/font-bold utilities actually request. This only affects
+     which number our own CSS uses to select the face; it has no bearing on
+     the license. */
+  --font-bawu-sans: 'BaWueSansWeb', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-bawu-serif: 'BaWueSerif', Georgia, 'Times New Roman', serif;
+}
+
+@font-face {
+  font-family: 'BaWueSansWeb';
+  src: url('/fonts/BaWueSansWeb-Regular.woff2') format('woff2'),
+       url('/fonts/BaWueSansWeb-Regular.woff') format('woff');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'BaWueSansWeb';
+  src: url('/fonts/BaWueSansWeb-RegularItalic.woff2') format('woff2'),
+       url('/fonts/BaWueSansWeb-RegularItalic.woff') format('woff');
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'BaWueSansWeb';
+  src: url('/fonts/BaWueSansWeb-SemiBold.woff2') format('woff2'),
+       url('/fonts/BaWueSansWeb-SemiBold.woff') format('woff');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'BaWueSansWeb';
+  src: url('/fonts/BaWueSansWeb-SemiBoldItalic.woff2') format('woff2'),
+       url('/fonts/BaWueSansWeb-SemiBoldItalic.woff') format('woff');
+  font-weight: 600;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'BaWueSansWeb';
+  src: url('/fonts/BaWueSansWeb-Bold.woff2') format('woff2'),
+       url('/fonts/BaWueSansWeb-Bold.woff') format('woff');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'BaWueSansWeb';
+  src: url('/fonts/BaWueSansWeb-BoldItalic.woff2') format('woff2'),
+       url('/fonts/BaWueSansWeb-BoldItalic.woff') format('woff');
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'BaWueSerif';
+  src: url('/fonts/BaWueSerifWeb-Regular.woff2') format('woff2'),
+       url('/fonts/BaWueSerifWeb-Regular.woff') format('woff');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'BaWueSerif';
+  src: url('/fonts/BaWueSerifWeb-Bold.woff2') format('woff2'),
+       url('/fonts/BaWueSerifWeb-Bold.woff') format('woff');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
 /* ── Themed scrollbars ───────────────────────────────────────────────────────
    Firefox uses scrollbar-width + scrollbar-color (2 values: thumb track).
    Chrome/Edge/Safari use the ::-webkit-scrollbar pseudo-elements.
