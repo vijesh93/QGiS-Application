@@ -1,0 +1,13 @@
+<!--
+  Committed fallback logo — an abstract mark using the official BW Gelb/
+  Schwarz colors (not copyrighted; color values aren't restricted), NOT the
+  official state logo itself. Used automatically (via onError in
+  Header.jsx/Sidebar.jsx) whenever BaWue_Logo_Flag_rgb.svg is missing —
+  e.g. a fresh clone of this public repo, where the real logo is gitignored
+  (see docs/licensed-assets-deployment.md). Anyone building from this repo
+  without that restricted asset still gets a working, branded-looking app.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 250 300">
+  <rect width="250" height="300" rx="20" fill="#2A2623"/>
+  <rect x="35" y="190" width="180" height="70" fill="#FFFC00"/>
+</svg>

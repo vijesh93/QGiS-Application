@@ -1,0 +1,11 @@
+<!--
+  PLACEHOLDER favicon — an abstract mark using the official BW Gelb/Schwarz
+  colors, NOT the official state logo/coat of arms (that requires the
+  licensed asset from design.landbw.de). Swap this file out once the real
+  logo/favicon asset is available; keep the filename "favicon.svg" so
+  index.html doesn't need updating.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <rect width="32" height="32" rx="4" fill="#2A2623"/>
+  <rect x="4" y="18" width="24" height="8" fill="#FFFC00"/>
+</svg>
