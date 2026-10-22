@@ -24,6 +24,7 @@ class LayerRepository:
             Layer.band_count,
             Layer.band_start_date,
             Layer.band_date_step_days,
+            Layer.band_labels,
             # This is the magic: Database turns binary map data into a text string
             func.ST_AsGeoJSON(Layer.bbox).label("extent")
         )

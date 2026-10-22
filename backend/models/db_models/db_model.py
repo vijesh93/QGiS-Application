@@ -1,4 +1,6 @@
 from sqlmodel import SQLModel, Field, Column
+from sqlalchemy import String
+from sqlalchemy.dialects.postgresql import ARRAY
 from typing import Optional, Any
 from datetime import date
 from geoalchemy2 import Geometry
@@ -27,12 +29,15 @@ class Layer(SQLModel, table=True):
     min_value: Optional[float] = None
     max_value: Optional[float] = None
 
-    # Time-series metadata: band 1 is a synthetic "mean" band when band_count > 1.
-    # band_start_date/band_date_step_days describe bands 2..band_count; NULL means
-    # no parseable per-band date convention was found for this raster.
+    # Time-series metadata: when band_count > 1, bands 1..band_count are real
+    # timesteps/values in source order (no synthetic band is added). NULL
+    # band_start_date/band_date_step_days means no parseable per-band date
+    # convention was found; band_labels carries raw per-band descriptions
+    # instead when the bands are a qualitative (non-date) sequence.
     band_count: int = Field(default=1)
     band_start_date: Optional[date] = None
     band_date_step_days: Optional[int] = None
+    band_labels: Optional[list[str]] = Field(default=None, sa_column=Column(ARRAY(String)))
 
 # This model can later be extended for GenAI features
 # e.g., adding a 'description_vector' column for semantic search

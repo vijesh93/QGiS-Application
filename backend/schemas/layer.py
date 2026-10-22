@@ -24,6 +24,7 @@ class LayerRead(BaseModel):
     band_count: int = 1
     band_start_date: Optional[date] = None
     band_date_step_days: Optional[int] = None
+    band_labels: Optional[List[str]] = None
     extent: Optional[Any] = None
 
     @field_validator("extent", mode="before")
