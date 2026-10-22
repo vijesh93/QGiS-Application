@@ -22,6 +22,9 @@ Options (pass as CLI args):
     --skip-optimize    Skip step 2
     --skip-validate    Skip step 3
     --only-register    Run step 4 only
+    --fast-register    Passthrough to register_layers.py's --fast: trust
+                        cached metadata sidecars instead of recomputing them
+                        (for the server-side re-register step after rsync)
 """
 
 import os
@@ -76,11 +79,11 @@ def count_tifs(directory: Path) -> int:
         return 0
     return len(list(directory.rglob("*.tif")) + list(directory.rglob("*.tiff")))
 
-def run(script: Path, label: str) -> bool:
+def run(script: Path, label: str, extra_args: list = None) -> bool:
     """Run a Python script as a subprocess. Returns True on success."""
     print(f"\n{BOLD}▶ Running {script.name}...{NC}\n")
     result = subprocess.run(
-        [PYTHON, str(script)],
+        [PYTHON, str(script), *(extra_args or [])],
         cwd=str(SCRIPT_DIR),   # always run from data/ so relative paths work
     )
     if result.returncode != 0:
@@ -168,13 +171,14 @@ def step_validate():
         warn("Tiles may not serve correctly. Check the raster-server container.")
 
 
-def step_register():
+def step_register(fast: bool = False):
     header("Step 4 / 4 — Register layer metadata in PostGIS")
     cog_count = count_tifs(OPTIMIZED_DIR)
     if cog_count == 0:
         fail("No .tif files in data_files/Optimized_Raster/. Cannot register.")
 
-    if not run(REGISTRAR, "Layer Registrar"):
+    extra_args = ["--fast"] if fast else None
+    if not run(REGISTRAR, "Layer Registrar", extra_args=extra_args):
         fail("Registration failed. Check DATABASE_URL and that the db container is healthy.")
 
 
@@ -196,6 +200,8 @@ def main():
     parser.add_argument("--skip-optimize", action="store_true", help="Skip COG optimization step")
     parser.add_argument("--skip-validate", action="store_true", help="Skip COG validation step")
     parser.add_argument("--only-register", action="store_true", help="Only run the registration step")
+    parser.add_argument("--fast-register", action="store_true",
+                         help="Passthrough to register_layers.py --fast (trust cached sidecars, skip recompute)")
     args = parser.parse_args()
 
     if args.only_register:
@@ -220,7 +226,7 @@ def main():
     else:
         warn("Skipping validation (--skip-validate)")
 
-    step_register()
+    step_register(fast=args.fast_register)
     summary()
 
 

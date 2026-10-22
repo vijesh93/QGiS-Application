@@ -2,16 +2,11 @@
 Shared helpers used before COG conversion.
 
 Some source rasters (e.g. a daily time series for a whole year) carry many
-bands in a single file instead of one band per layer. Earlier, those got
-collapsed to a single across-band mean before COG conversion. The pipeline
-now keeps every band so the frontend can let a user scrub through individual
-timesteps (via TiTiler's `bidx` tile parameter), and additionally prepends a
-synthetic "mean" band ahead of the real ones so a newly-activated layer still
-defaults to the same smooth annual-overview look it always has, before the
-user touches a time control.
-
-A raster that already has exactly one band is returned unchanged — nothing
-to average, nothing to prepend.
+bands in a single file instead of one band per layer. The pipeline keeps
+every band exactly as it appears in the source, in order, so the frontend
+can let a user scrub through individual timesteps (via TiTiler's `bidx`
+tile parameter) — band 1 of the optimized output is simply the first real
+band of the source, nothing synthetic is added.
 """
 
 import re
@@ -20,7 +15,6 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import List, Optional, Tuple
 
-import numpy as np
 import rasterio
 
 _BAND_DATE_RE = re.compile(r"^([A-Za-z]+)_(\d{4})_(\d{3})$")
@@ -100,76 +94,12 @@ def parse_band_date_convention(descriptions: List[Optional[str]]) -> Tuple[Optio
     return start_date, step_days
 
 
-def prepare_multiband_source(src: Path, tmp_path: Path) -> Path:
-    """Returns a Path to a COG-ready version of `src` with a mean band prepended.
-
-    If `src` has exactly one band, `src` itself is returned untouched (static
-    rasters never get a synthetic mean band — there's nothing to average).
-
-    If it has more than one band, writes a `(count + 1)`-band file to
-    `tmp_path`: band 1 is the nodata-aware mean across all source bands (no
-    description), bands 2..count+1 are the original bands unchanged, each
-    carrying over its source `description` so e.g. `pr_2026_001` lands on
-    band 2. The caller owns `tmp_path` and is responsible for deleting it
-    once conversion is done — compare the return value against `tmp_path` to
-    know whether a temporary file was actually created.
-
-    Streams one band at a time (two passes over `src`: one to accumulate the
-    mean, one to copy bands through) rather than loading every band into
-    memory at once — a many-band file (e.g. 366 daily bands) previously had
-    to fit entirely in RAM simultaneously as a masked array, which could use
-    several hundred MB to multiple GB for one file and was a real cause of
-    the pipeline getting OOM-killed on memory-constrained machines. Peak
-    memory here is roughly one band plus two single-band accumulator arrays,
-    regardless of how many bands the file has.
-    """
-    with rasterio.open(src) as ds:
-        if ds.count <= 1:
-            return src
-
-        nodata = ds.nodata if ds.nodata is not None else float("nan")
-
-        # Pass 1: nodata-aware running sum + valid-pixel count, one band at
-        # a time — equivalent to the old masked `data.mean(axis=0)` but
-        # without ever holding more than one band in memory.
-        sum_ = np.zeros((ds.height, ds.width), dtype="float64")
-        count = np.zeros((ds.height, ds.width), dtype="int32")
-        for b in range(1, ds.count + 1):
-            band = ds.read(b, masked=True)
-            sum_ += np.ma.filled(band, 0.0).astype("float64")
-            count += (~np.ma.getmaskarray(band)).astype("int32")
-
-        with np.errstate(invalid="ignore", divide="ignore"):
-            mean = np.where(count > 0, sum_ / count, nodata).astype("float32")
-
-        profile = ds.profile.copy()
-        profile.update(driver="GTiff", count=ds.count + 1, dtype="float32", nodata=nodata)
-
-        tmp_path.parent.mkdir(parents=True, exist_ok=True)
-        descriptions = ds.descriptions
-        with rasterio.open(tmp_path, "w", **profile) as out:
-            out.write(mean, 1)
-            out.set_band_description(1, "mean")
-
-            # Pass 2: copy each source band straight through to its output
-            # slot, one band at a time.
-            for i in range(1, ds.count + 1):
-                band = ds.read(i, masked=True)
-                band_filled = np.ma.filled(band, nodata)
-                out.write(band_filled, i + 1)
-                if descriptions[i - 1]:
-                    out.set_band_description(i + 1, descriptions[i - 1])
-
-    return tmp_path
-
-
 def optimize_to_cog(src: Path, dst: Path, force: bool = False) -> bool:
     """Convert a GeoTIFF to an optimized, tiled GeoTIFF using gdal_translate.
 
-    Multi-band sources (e.g. a daily time series for a year) get a synthetic
-    "mean" band prepended, then every original band is preserved after it —
-    TiTiler's `bidx` tile parameter lets the frontend pick whichever one it
-    wants. A raster that already has a single band passes through unchanged.
+    Every band of `src` is preserved, in order, with its original
+    description — TiTiler's `bidx` tile parameter lets the frontend pick
+    whichever one it wants. No synthetic band is added or removed.
 
     Single-band output uses GDAL's COG driver as before. Multi-band output
     deliberately does NOT use the COG driver: that driver hardcodes
@@ -182,17 +112,17 @@ def optimize_to_cog(src: Path, dst: Path, force: bool = False) -> bool:
     for TiTiler's purposes, but ~7-10x faster for single-band reads out of a
     many-band file (measured ~0.15-0.2s per tile after this change).
 
+    `src` is converted straight to `dst` — no temp file, no extra read pass.
+
     If `force` is True, an existing `dst` is deleted and rebuilt instead of
     being skipped — used to regenerate files produced by an older version of
-    this pipeline (e.g. the old single-band-only squash, or the PIXEL-
-    interleaved multi-band COG from before this fix).
+    this pipeline (e.g. the old mean-band convention, or the PIXEL-
+    interleaved multi-band COG from before the INTERLEAVE fix).
 
     This is the one place raw→optimized conversion happens — both
     `cog_optimizer.py` (the pipeline's dedicated optimize step) and anything
     else that needs to (re)produce an optimized file call this, rather than
-    each keeping its own copy of the conversion logic (two copies is how the
-    `INTERLEAVE=PIXEL` bug above ended up fixed in one place and not the
-    other for a while).
+    each keeping its own copy of the conversion logic.
     """
     dst.parent.mkdir(parents=True, exist_ok=True)
     if dst.exists():
@@ -201,14 +131,12 @@ def optimize_to_cog(src: Path, dst: Path, force: bool = False) -> bool:
             return True
         dst.unlink()
 
-    mean_tmp = dst.parent / f"_{dst.stem}.band_mean_tmp.tif"
     try:
-        conversion_src = prepare_multiband_source(src, mean_tmp)
+        with rasterio.open(src) as ds:
+            is_multiband = ds.count > 1
     except Exception as e:
         print(f"❌ Could not read {src.name}, skipping: {e}")
         return False
-
-    is_multiband = conversion_src == mean_tmp
 
     try:
         if is_multiband:
@@ -220,7 +148,7 @@ def optimize_to_cog(src: Path, dst: Path, force: bool = False) -> bool:
                 "-co", "BLOCKYSIZE=512",
                 "-co", "INTERLEAVE=BAND",
                 "-co", "COMPRESS=DEFLATE",
-                str(conversion_src), str(dst)
+                str(src), str(dst)
             ], check=True, capture_output=True)
             subprocess.run([
                 "gdaladdo", "-r", "average", str(dst), "2", "4", "8"
@@ -231,7 +159,7 @@ def optimize_to_cog(src: Path, dst: Path, force: bool = False) -> bool:
                 "-of", "COG",
                 "-co", "COMPRESS=DEFLATE",
                 "-co", "OVERVIEW_RESAMPLING=AVERAGE",
-                str(conversion_src), str(dst)
+                str(src), str(dst)
             ], check=True, capture_output=True)
 
         print(f"  ↳ Optimized → {dst.name}")
@@ -240,19 +168,17 @@ def optimize_to_cog(src: Path, dst: Path, force: bool = False) -> bool:
     except subprocess.CalledProcessError as e:
         print(f"❌ COG conversion failed for {src.name}: {e.stderr}")
         return False
-    finally:
-        if conversion_src == mean_tmp and mean_tmp.exists():
-            mean_tmp.unlink()
 
 
 def is_stale_timeseries_output(src: Path, optimized: Path) -> bool:
     """True if an already-optimized file needs rebuilding because `src` is a
     genuine multi-band (time-series) source but `optimized` doesn't reflect
-    the current pipeline shape — either it's still the old single-mean-band
-    squash (band count doesn't match src's real band count + 1), or it's
-    multi-band but still PIXEL-interleaved (the COG driver's hardcoded
-    layout, which makes reading one band out of many require decompressing
-    all of them — see optimize_to_cog's docstring).
+    the current pipeline shape — either its band count doesn't match src's
+    own band count (e.g. it still carries an old synthetic mean band from a
+    previous version of this pipeline), or it's multi-band but still
+    PIXEL-interleaved (the COG driver's hardcoded layout, which makes
+    reading one band out of many require decompressing all of them — see
+    optimize_to_cog's docstring).
 
     Single-band sources are NEVER flagged here: an optimized single-band
     file's band count (1) is indistinguishable from the old pre-feature
@@ -271,7 +197,7 @@ def is_stale_timeseries_output(src: Path, optimized: Path) -> bool:
         if src_band_count <= 1:
             return False  # static raster — never subject to the time-series shape
         with rasterio.open(optimized) as ds:
-            if ds.count != src_band_count + 1:
+            if ds.count != src_band_count:
                 return True
             return ds.tags(ns="IMAGE_STRUCTURE").get("INTERLEAVE") != "BAND"
     except Exception:
