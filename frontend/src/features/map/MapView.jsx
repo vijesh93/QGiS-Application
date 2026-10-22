@@ -117,7 +117,7 @@ const MapView = ({ BaseMapTransparency, activeLayersList, opacities, selectedBan
         // Each layer gets its own color stretch from its real data range
         // (falls back to buildTileUrl's default if not yet registered with a
         // min/max), and — for multi-band/time-series layers — its currently
-        // selected band via bidx (defaults to band 1, the "Mean" band).
+        // selected band via bidx (defaults to band 1, the first timestep).
         const initialBand = selectedBandsRef.current[layer.id] ?? 1;
         const tileUrl = buildLayerTileUrl(layer, initialBand);
         console.log(`Adding "${layer.name}" → ${tileUrl}`);

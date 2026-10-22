@@ -45,7 +45,7 @@ export function useLayers() {
           data.forEach((l) => {
             initOpacity[l.id]  = 80;
             initActive[l.id]   = false;
-            initBand[l.id]     = 1; // band 1 = synthetic "mean" band (or the only band)
+            initBand[l.id]     = 1; // band 1 = first timestep (or the only band)
             if (l.category) initExpanded[l.category] = true;
           });
           // Batch all state updates — React 18 batches these automatically
@@ -87,18 +87,17 @@ export function useLayers() {
   }, []);
 
   // Maps a 0-100% master position independently onto each active multi-band
-  // layer's own band range: 0% = band 1 (Mean) for every layer, 100% = each
-  // layer's own last band. Layers with bandCount <= 1 are left untouched —
-  // the master control has no effect on static layers.
+  // layer's own band range: 0% = band 1 (first timestep) for every layer,
+  // 100% = each layer's own last band. Layers with bandCount <= 1 are left
+  // untouched — the master control has no effect on static layers.
   const applyMasterPercentage = useCallback((pct) => {
     setSelectedBands((prev) => {
       const next = { ...prev };
       allLayersRef.current.forEach((layer) => {
         if (!activeLayersRef.current[layer.id]) return;
         if (!layer.bandCount || layer.bandCount <= 1) return;
-        next[layer.id] = pct <= 0
-          ? 1
-          : 2 + Math.round((pct / 100) * (layer.bandCount - 2));
+        const band = 1 + Math.round((pct / 100) * (layer.bandCount - 1));
+        next[layer.id] = Math.min(layer.bandCount, Math.max(1, band));
       });
       return next;
     });

@@ -14,15 +14,20 @@ const CATEGORY_COLORS = [
   '#CE93D8', '#80DEEA', '#FFCC02', '#A5D6A7',
 ];
 
-// band 1 = synthetic "mean" band; bands 2..bandCount = real timesteps.
+// bands 1..bandCount are all real timesteps/values — band_start_date (when
+// set) corresponds to band 1. band_labels (when set) takes priority over
+// date math for layers whose bands are a qualitative, non-date sequence
+// (e.g. "near"/"medium"/"far" prediction horizons).
 function formatBandLabel(layer, band) {
-  if (band <= 1) return 'Mean';
+  if (layer.bandLabels && layer.bandLabels[band - 1]) {
+    return layer.bandLabels[band - 1];
+  }
   if (layer.bandStartDate && layer.bandDateStepDays) {
     const d = new Date(layer.bandStartDate);
-    d.setDate(d.getDate() + (band - 2) * layer.bandDateStepDays);
+    d.setDate(d.getDate() + (band - 1) * layer.bandDateStepDays);
     return d.toISOString().slice(0, 10);
   }
-  return `Day ${band - 1} of ${layer.bandCount - 1}`;
+  return `Day ${band} of ${layer.bandCount}`;
 }
 
 // Dragging this fires onChange on every pixel of movement — committing each

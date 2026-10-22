@@ -40,6 +40,7 @@ function normaliseLayer(raw) {
     bandCount:       raw.band_count          ?? 1,
     bandStartDate:   raw.band_start_date     ?? null,
     bandDateStepDays: raw.band_date_step_days ?? null,
+    bandLabels:      raw.band_labels         ?? null,
     bounds:      extentToBounds(raw.extent),
     tile_url:    null,
   };
@@ -82,9 +83,9 @@ export async function fetchRasterInventory() {
 //
 // IMPORTANT: No encoding on url= or rescale= — plain string concatenation only.
 //
-// `bidx` selects which band a time-series layer's tiles come from (1 = the
-// synthetic "mean" band, 2..N = real timesteps — see band_count/band_start_date
-// on the layer). Omitted entirely for single-band layers, so they're unaffected.
+// `bidx` selects which band a time-series layer's tiles come from (1..N are
+// all real timesteps/values — see band_count/band_start_date/band_labels on
+// the layer). Omitted entirely for single-band layers, so they're unaffected.
 export function buildTileUrl(cogPath, rescale = '-1,1', colormap = 'viridis', bidx = null) {
   const bidxParam = bidx != null ? `&bidx=${bidx}` : '';
   return `${TITILER_URL}/cog/tiles/WebMercatorQuad/{z}/{x}/{y}.png?url=${cogPath}&rescale=${rescale}&colormap_name=${colormap}${bidxParam}`;

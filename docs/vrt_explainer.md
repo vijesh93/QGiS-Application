@@ -1,6 +1,6 @@
 # Per-band VRTs: why the time slider needed them
 
-This explains a performance fix applied to the time-series raster layers (e.g. `pr_2026.tif`, a 366-band file: band 1 is a synthetic "mean" band, bands 2-366 are real daily values). If you're new to this codebase and the time slider, read this before touching `data/raster_utils.py`'s `generate_band_vrts()`, `frontend/src/api/layersApi.js`'s `buildBandVrtPath()`, or `frontend/src/features/map/MapView.jsx`'s `buildLayerTileUrl()`.
+This explains a performance fix applied to the time-series raster layers (e.g. `pr_2026.tif`, a 366-band file: each band is a real daily value, in source order — no synthetic band is added). If you're new to this codebase and the time slider, read this before touching `data/raster_utils.py`'s `generate_band_vrts()`, `frontend/src/api/layersApi.js`'s `buildBandVrtPath()`, or `frontend/src/features/map/MapView.jsx`'s `buildLayerTileUrl()`.
 
 ## What a GDAL VRT is
 
@@ -55,7 +55,7 @@ The fix rewrites `SourceFilename` to a bare relative filename with `relativeToVR
 
 ## The naming convention (must stay in sync on both ends)
 
-Every band `n` (1..`band_count`, including the synthetic mean band at `n=1`) gets a VRT named `<stem>_band{n:03d}.vrt`, written next to its source optimized `.tif`. E.g. `pr_2026.tif`'s band 50 → `pr_2026_band050.vrt`, same directory.
+Every band `n` (1..`band_count`) gets a VRT named `<stem>_band{n:03d}.vrt`, written next to its source optimized `.tif`. E.g. `pr_2026.tif`'s band 50 → `pr_2026_band050.vrt`, same directory.
 
 This convention is implemented **twice**, once per language, and both must agree:
 - **Write side** (Python, pipeline): `data/raster_utils.py`'s `generate_band_vrts()`, called from `data/register_layers.py` right after a layer's `band_count` is known.
@@ -63,7 +63,7 @@ This convention is implemented **twice**, once per language, and both must agree
 
 If you ever change the padding width, the `_band` separator, or where VRTs live relative to their source, update both functions together — nothing enforces they match except this convention.
 
-Band 1 (the mean band) gets a VRT too, not just the real days — so a multi-band layer's tile requests *never* touch the big multi-band file directly, not even on first activation before the slider is touched.
+Band 1 gets a VRT just like every other band — so a multi-band layer's tile requests *never* touch the big multi-band file directly, not even on first activation before the slider is touched.
 
 ## Why bands aren't separate database rows
 
