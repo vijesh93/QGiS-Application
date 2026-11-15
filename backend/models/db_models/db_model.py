@@ -17,6 +17,7 @@ class Layer(SQLModel, table=True):
     slug: str = Field(index=True, unique=True)
     display_name: str
     category: str = Field(index=True)
+    subcategory: Optional[str] = Field(default=None, index=True)
     layer_type: str
     file_path: Optional[str] = None
     is_active: bool = Field(default=True)
@@ -38,6 +39,12 @@ class Layer(SQLModel, table=True):
     band_start_date: Optional[date] = None
     band_date_step_days: Optional[int] = None
     band_labels: Optional[list[str]] = Field(default=None, sa_column=Column(ARRAY(String)))
+
+    # 'sequence' (default — bands are successive timesteps/values, shown via
+    # the time slider) or 'distribution' (bands are simultaneous statistics
+    # of one quantity at one point in time, e.g. median/p17/p83 — shown via
+    # the map-click pixel-value popup instead, never the time slider).
+    band_mode: str = Field(default="sequence")
 
 # This model can later be extended for GenAI features
 # e.g., adding a 'description_vector' column for semantic search

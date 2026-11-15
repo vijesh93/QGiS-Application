@@ -17,6 +17,7 @@ class LayerRead(BaseModel):
     slug: str
     display_name: str
     category: str
+    subcategory: Optional[str] = None
     layer_type: str
     file_path: Optional[str]
     min_value: Optional[float] = None
@@ -25,6 +26,7 @@ class LayerRead(BaseModel):
     band_start_date: Optional[date] = None
     band_date_step_days: Optional[int] = None
     band_labels: Optional[List[str]] = None
+    band_mode: str = "sequence"
     extent: Optional[Any] = None
 
     @field_validator("extent", mode="before")

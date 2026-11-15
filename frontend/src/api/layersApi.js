@@ -41,6 +41,7 @@ function normaliseLayer(raw) {
     bandStartDate:   raw.band_start_date     ?? null,
     bandDateStepDays: raw.band_date_step_days ?? null,
     bandLabels:      raw.band_labels         ?? null,
+    bandMode:        raw.band_mode           || 'sequence',
     bounds:      extentToBounds(raw.extent),
     tile_url:    null,
   };
@@ -100,4 +101,36 @@ export function buildTileUrl(cogPath, rescale = '-1,1', colormap = 'viridis', bi
 export function buildBandVrtPath(cogPath, band) {
   const padded = String(band).padStart(3, '0');
   return cogPath.replace(/\.tif$/i, `_band${padded}.vrt`);
+}
+
+// ─── Point query (pixel values at a clicked location) ───────────────────────
+// Used by the map's click-to-inspect popup. Queries the layer's main COG
+// (not a per-band VRT — point queries need every band at once; VRTs are
+// single-band-only, built solely for the time-slider's tile-serving
+// performance fix, see buildBandVrtPath above), so one request returns
+// every band's value in one shot.
+//
+// Returns the raw `values` array (positionally correct: band 1, band 2,
+// ... — confirmed against gdalinfo), or null on ANY failure: a 404 (click
+// outside this layer's real data extent despite passing the coarse
+// `bounds` rectangle check — a bbox is a rectangle, real raster coverage
+// can be smaller/irregular within it), a TiTiler error, or a network
+// error. Deliberately never throws — a failed point query just means "no
+// data here", not something that should crash the click handler or leave
+// a popup stuck loading.
+//
+// NOTE: never read `band_descriptions` from this endpoint's response —
+// confirmed buggy (repeats the last band's real description for every
+// entry, cross-checked against gdalinfo and against /cog/info, which DOES
+// return correct per-band descriptions). Only `values` is trustworthy
+// here; zip it against the layer's own DB-sourced `bandLabels` instead.
+export async function fetchPixelValues(cogPath, lng, lat) {
+  try {
+    const r = await fetch(`${TITILER_URL}/cog/point/${lng},${lat}?url=${cogPath}`);
+    if (!r.ok) return null;
+    const data = await r.json();
+    return Array.isArray(data?.values) ? data.values : null;
+  } catch {
+    return null;
+  }
 }

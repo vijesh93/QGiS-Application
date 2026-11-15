@@ -1,11 +1,15 @@
 import LegalPageLayout from '../components/LegalPageLayout';
 import { ORG_NAME } from '../constants/brand';
+import legal from '../config/legal.json';
 
 // Datenschutzerklärung (DSGVO). The factual claims here (no accounts, no
 // cookies/tracking) match what a codebase review found as of 2026-10 — if
 // that ever changes (analytics added, forms added, etc.), this page must be
-// updated accordingly. [PLATZHALTER] fields need LAZBW's exact DSB contact
-// — see docs/bw-rebrand-plan.md, Open Items #3/#4.
+// updated accordingly. The real org/DSB contact lives in
+// frontend/src/config/legal.json (gitignored — copy legal.example.json to
+// legal.json and fill in LAZBW's exact details before this app goes fully
+// public — see README's Quick Start and docs/bw-rebrand-plan.md, Open Items
+// #3/#4).
 export default function Datenschutz() {
   return (
     <LegalPageLayout title="Datenschutzerklärung">
@@ -19,13 +23,13 @@ export default function Datenschutz() {
       <p>
         {ORG_NAME}
         <br />
-        [PLATZHALTER: Straße, PLZ, Ort]
+        {legal.address.strasse}, {legal.address.plzOrt}
         <br />
-        E-Mail: [PLATZHALTER]
+        E-Mail: {legal.datenschutz.email}
       </p>
 
       <h2>Datenschutzbeauftragte(r)</h2>
-      <p>[PLATZHALTER: Name/Kontakt des bzw. der Datenschutzbeauftragten der {ORG_NAME}]</p>
+      <p>{legal.datenschutz.datenschutzbeauftragter}</p>
 
       <h2>Server-Logfiles</h2>
       <p>

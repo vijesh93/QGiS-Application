@@ -8,27 +8,12 @@
 // docs/bw-rebrand-plan.md, item 6.
 
 import React, { useState, useEffect } from 'react';
+import { formatBandLabel } from '../utils/bandLabel';
 
 const CATEGORY_COLORS = [
   '#4FC3F7', '#81C784', '#FFB74D', '#F48FB1',
   '#CE93D8', '#80DEEA', '#FFCC02', '#A5D6A7',
 ];
-
-// bands 1..bandCount are all real timesteps/values — band_start_date (when
-// set) corresponds to band 1. band_labels (when set) takes priority over
-// date math for layers whose bands are a qualitative, non-date sequence
-// (e.g. "near"/"medium"/"far" prediction horizons).
-function formatBandLabel(layer, band) {
-  if (layer.bandLabels && layer.bandLabels[band - 1]) {
-    return layer.bandLabels[band - 1];
-  }
-  if (layer.bandStartDate && layer.bandDateStepDays) {
-    const d = new Date(layer.bandStartDate);
-    d.setDate(d.getDate() + (band - 1) * layer.bandDateStepDays);
-    return d.toISOString().slice(0, 10);
-  }
-  return `Day ${band} of ${layer.bandCount}`;
-}
 
 // Dragging this fires onChange on every pixel of movement — committing each
 // one straight to the map would mean a fresh TiTiler tile request per pixel.
@@ -221,8 +206,12 @@ export default function ActiveLayersLegend({
                   </span>
                 </div>
 
-                {/* Time row — only for multi-band (time-series) layers */}
-                {layer.bandCount > 1 && (
+                {/* Time row — only for multi-band sequence (time-series) layers.
+                    Distribution-mode layers (band_mode === 'distribution', e.g.
+                    median/p17/p83/... statistics) never get a slider — the map
+                    always shows band 1; the rest surface via the map-click
+                    pixel-value popup instead, not by scrubbing. */}
+                {layer.bandCount > 1 && layer.bandMode !== 'distribution' && (
                   <TimeSliderRow
                     layer={layer}
                     selectedBand={selectedBands[layer.id] ?? 1}

@@ -58,6 +58,8 @@ A high-performance, containerized Web GIS application for visualizing and managi
 │   │   ├── features/map/
 │   │   │   ├── MapView.jsx         # MapLibre map component
 │   │   │   └── hooks/useLayers.jsx # Layer state management
+│   │   ├── config/
+│   │   │   └── legal.example.json  # Impressum/Datenschutz/Barrierefreiheit template
 │   │   └── styles/index.css
 │   └── vite.config.js              # Vite + proxy config
 │
@@ -134,7 +136,17 @@ VITE_API_URL=/api/v1
 
 > **`DB_PASSWORD_URL`** must be the URL-percent-encoded version of your password if it contains special characters (`@`, `#`, `/` etc.). For plain alphanumeric passwords they are identical.
 
-### 3. Start the stack
+### 3. Create your legal-pages config
+
+The Impressum, Datenschutzerklärung, and Barrierefreiheit pages (German legal requirements for contact/org details) read from a file that's gitignored, since it holds your organization's real address, phone, email, etc. — not meant for a public repo:
+
+```bash
+cp frontend/src/config/legal.example.json frontend/src/config/legal.json
+```
+
+Then edit `frontend/src/config/legal.json` and replace every `[PLATZHALTER: ...]` field with your organization's real details. The app builds and runs fine with the placeholders left in (they render on the page as visible `[PLATZHALTER: ...]` text, same as before this file existed) — just don't go to production without filling them in.
+
+### 4. Start the stack
 
 **Development** (hot-reload, bind-mounts, source maps):
 
@@ -148,7 +160,7 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
 docker compose -f docker-compose.yml up --build -d
 ```
 
-### 4. Verify services are running
+### 5. Verify services are running
 
 ```bash
 docker compose ps

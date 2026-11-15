@@ -1,8 +1,45 @@
-import React, { useEffect, useRef, useCallback } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import maplibregl from 'maplibre-gl';
-import { buildTileUrl, buildBandVrtPath } from '../../api/layersApi';
+import { buildTileUrl, buildBandVrtPath, fetchPixelValues } from '../../api/layersApi';
+import PixelValuePopup from '../../components/PixelValuePopup';
 
 const toMapId = (id) => `layer_${id}`;
+
+// True if `lng,lat` falls inside `bounds` ([west,south,east,north]), or
+// always true when bounds is null/undefined — matches the "no restriction"
+// meaning MapView already gives a null bounds everywhere else (see the
+// `...(layer.bounds ? { bounds: layer.bounds } : {})` source option below).
+function coversPoint(bounds, lng, lat) {
+  if (!bounds) return true;
+  const [west, south, east, north] = bounds;
+  return lng >= west && lng <= east && lat >= south && lat <= north;
+}
+
+// Rough footprint used only to keep the popup from overflowing the map
+// container on clicks near an edge — doesn't need to be exact, just in
+// the right ballpark.
+const POPUP_WIDTH_ESTIMATE  = 280;
+const POPUP_HEIGHT_ESTIMATE = 180;
+const POPUP_OFFSET = 12;
+
+// Plain DOM element for the pixel-value marker — a maplibregl.Marker isn't
+// a React component, so this can't be styled via JSX. A small ringed dot
+// in the same accent yellow (#FFFC00) the popup already uses for values,
+// with a dark border so it stays visible against any raster colormap
+// underneath. pointerEvents: 'none' so the marker itself never blocks a
+// later click on the same spot (it has no interactive purpose — dragging
+// it would desync it from the popup's actual query point).
+function createMarkerElement() {
+  const el = document.createElement('div');
+  el.style.width = '14px';
+  el.style.height = '14px';
+  el.style.borderRadius = '50%';
+  el.style.background = '#FFFC00';
+  el.style.border = '2px solid #2A2623';
+  el.style.boxShadow = '0 0 0 2px rgba(255,252,0,0.45), 0 2px 6px rgba(0,0,0,0.6)';
+  el.style.pointerEvents = 'none';
+  return el;
+}
 
 // Builds this layer's tile URL, including its own rescale and (when it's a
 // multi-band/time-series layer) the currently-selected band. Multi-band
@@ -30,16 +67,53 @@ const MapView = ({ BaseMapTransparency, activeLayersList, opacities, selectedBan
   const addedLayers      = useRef(new Set());
   const opacitiesRef     = useRef(opacities);
   const selectedBandsRef = useRef(selectedBands);
+  const activeLayersListRef = useRef(activeLayersList);
   const lastBandRef      = useRef({});      // mapId → last-applied bidx, to skip no-op updates
   const pendingSyncRef   = useRef(null);    // queued sync call waiting for map load
+  const clickSeqRef      = useRef(0);       // guards against a stale point-query response
+                                             // landing after a newer click superseded it
+  const markerRef        = useRef(null);    // the single maplibregl.Marker marking whichever
+                                             // pixel the popup (if any) is currently showing
 
-  // Keep opacitiesRef/selectedBandsRef current without triggering effects
+  // Pixel-value popup state: null when no popup is shown, otherwise
+  // { x, y, layer, values, loading, error }. `values` holds every band's
+  // value (fetched once, in one point query) regardless of band_mode — the
+  // popup re-derives which row(s) to show from `layer.bandMode` and the
+  // live `selectedBands` prop, so moving the time slider while the popup
+  // is open re-indexes into the already-fetched `values` with no refetch.
+  const [pixelPopup, setPixelPopup] = useState(null);
+
+  // Detaches the pixel marker (if any) from the map without discarding the
+  // Marker instance — it's cheap to re-attach via .setLngLat().addTo(map)
+  // on the next click, so there's no need to recreate the DOM element
+  // every time the popup closes and reopens.
+  const removeMarker = () => {
+    if (markerRef.current) {
+      markerRef.current.remove();
+    }
+  };
+
+  // Keep opacitiesRef/selectedBandsRef/activeLayersListRef current without
+  // triggering effects
   useEffect(() => {
     opacitiesRef.current = opacities;
   });
   useEffect(() => {
     selectedBandsRef.current = selectedBands;
   });
+  useEffect(() => {
+    activeLayersListRef.current = activeLayersList;
+  });
+
+  // Auto-dismiss the popup if its layer gets toggled off (or otherwise
+  // drops out of activeLayersList) while it's open — showing a popup for a
+  // layer that's no longer on the map would be confusing.
+  useEffect(() => {
+    if (pixelPopup && !activeLayersList.some((l) => l.id === pixelPopup.layer.id)) {
+      setPixelPopup(null);
+      removeMarker();
+    }
+  }, [activeLayersList, pixelPopup]);
 
   // ── Init map (runs exactly once) ───────────────────────────────────────
   useEffect(() => {
@@ -64,6 +138,59 @@ const MapView = ({ BaseMapTransparency, activeLayersList, opacities, selectedBan
     map.addControl(new maplibregl.NavigationControl({ showCompass: true }), 'top-right');
     map.addControl(new maplibregl.ScaleControl({ maxWidth: 120, unit: 'metric' }), 'bottom-right');
 
+    // ── Click-to-inspect: topmost active layer covering the clicked point ──
+    // activeLayersList's LAST entry is the visually topmost layer (layers
+    // are only ever appended via map.addLayer() with no beforeId, never
+    // reordered) — so this walks the list end-to-start and stops at the
+    // first one whose bounds (coarse, rectangular) cover the click. Zero
+    // active layers, or none covering this point, is a silent no-op: no
+    // popup, nothing to show, no change from today's click behavior.
+    map.on('click', (e) => {
+      const list = activeLayersListRef.current;
+      if (!list || list.length === 0) return;
+
+      const { lng, lat } = e.lngLat;
+      let topmost = null;
+      for (let i = list.length - 1; i >= 0; i--) {
+        if (coversPoint(list[i].bounds, lng, lat)) {
+          topmost = list[i];
+          break;
+        }
+      }
+      if (!topmost) return;
+
+      const seq = ++clickSeqRef.current;
+      const containerEl = mapContainer.current;
+      const maxX = containerEl ? Math.max(8, containerEl.clientWidth - POPUP_WIDTH_ESTIMATE - 8) : e.point.x;
+      const maxY = containerEl ? Math.max(8, containerEl.clientHeight - POPUP_HEIGHT_ESTIMATE - 8) : e.point.y;
+
+      // Mark the exact clicked coordinate so it's unambiguous which pixel
+      // the popup's values came from. One Marker instance is reused across
+      // clicks (just moved) rather than recreated each time.
+      if (!markerRef.current) {
+        markerRef.current = new maplibregl.Marker({ element: createMarkerElement(), anchor: 'center' });
+      }
+      markerRef.current.setLngLat([lng, lat]).addTo(map);
+
+      setPixelPopup({
+        x: Math.min(e.point.x + POPUP_OFFSET, maxX),
+        y: Math.min(e.point.y + POPUP_OFFSET, maxY),
+        layer: topmost,
+        values: null,
+        loading: true,
+        error: false,
+      });
+
+      fetchPixelValues(topmost.cog_path, lng, lat).then((values) => {
+        if (clickSeqRef.current !== seq) return; // superseded by a newer click
+        setPixelPopup((prev) => (
+          prev && prev.layer.id === topmost.id
+            ? { ...prev, values, loading: false, error: values === null }
+            : prev
+        ));
+      });
+    });
+
     map.once('load', () => {
       mapReadyRef.current = true;
       mapRef.current = map;
@@ -76,6 +203,10 @@ const MapView = ({ BaseMapTransparency, activeLayersList, opacities, selectedBan
 
     return () => {
       mapReadyRef.current = false;
+      if (markerRef.current) {
+        markerRef.current.remove();
+        markerRef.current = null;
+      }
       map.remove();
       mapRef.current = null;
     };
@@ -204,10 +335,24 @@ const MapView = ({ BaseMapTransparency, activeLayersList, opacities, selectedBan
   }, [selectedBands, activeLayersList]);
 
   return (
-    <div
-      ref={mapContainer}
-      style={{ flex: 1, height: '100%', width: '100%' }}
-    />
+    <>
+      <div
+        ref={mapContainer}
+        style={{ flex: 1, height: '100%', width: '100%' }}
+      />
+      {pixelPopup && (
+        <PixelValuePopup
+          x={pixelPopup.x}
+          y={pixelPopup.y}
+          layer={pixelPopup.layer}
+          selectedBand={selectedBands[pixelPopup.layer.id] ?? 1}
+          values={pixelPopup.values}
+          loading={pixelPopup.loading}
+          error={pixelPopup.error}
+          onClose={() => { setPixelPopup(null); removeMarker(); }}
+        />
+      )}
+    </>
   );
 };
 

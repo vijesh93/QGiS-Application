@@ -1,0 +1,21 @@
+{
+  "address": {
+    "strasse": "[PLATZHALTER: Straße und Hausnummer]",
+    "plzOrt": "[PLATZHALTER: PLZ und Ort]"
+  },
+  "impressum": {
+    "vertretenDurch": "[PLATZHALTER: Name der vertretungsberechtigten Person/Leitung]",
+    "telefon": "[PLATZHALTER]",
+    "email": "[PLATZHALTER]",
+    "aufsichtsbehoerde": "[PLATZHALTER: zuständiges Ministerium des Landes Baden-Württemberg]",
+    "verantwortlichFuerInhalt": "[PLATZHALTER: Name und Anschrift der inhaltlich verantwortlichen Person]"
+  },
+  "datenschutz": {
+    "email": "[PLATZHALTER]",
+    "datenschutzbeauftragter": "[PLATZHALTER: Name/Kontakt des bzw. der Datenschutzbeauftragten der LAZBW]"
+  },
+  "barrierefreiheit": {
+    "feedbackEmail": "[PLATZHALTER]",
+    "feedbackTelefon": "[PLATZHALTER]"
+  }
+}

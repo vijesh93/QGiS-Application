@@ -1,9 +1,12 @@
 import LegalPageLayout from '../components/LegalPageLayout';
 import { ORG_NAME } from '../constants/brand';
+import legal from '../config/legal.json';
 
 // Required under § 5 TMG / § 18 Abs. 2 MStV. Structure is complete; the
-// bracketed [PLATZHALTER] fields need LAZBW's exact details before this app
-// goes fully public — see docs/bw-rebrand-plan.md, Open Items #2.
+// actual org details live in frontend/src/config/legal.json (gitignored —
+// copy legal.example.json to legal.json and fill in LAZBW's exact details
+// before this app goes fully public — see README's Quick Start and
+// docs/bw-rebrand-plan.md, Open Items #2).
 export default function Impressum() {
   return (
     <LegalPageLayout title="Impressum">
@@ -13,26 +16,26 @@ export default function Impressum() {
       <p>
         {ORG_NAME}
         <br />
-        [PLATZHALTER: Straße und Hausnummer]
+        {legal.address.strasse}
         <br />
-        [PLATZHALTER: PLZ und Ort]
+        {legal.address.plzOrt}
       </p>
 
       <h2>Vertreten durch</h2>
-      <p>[PLATZHALTER: Name der vertretungsberechtigten Person/Leitung]</p>
+      <p>{legal.impressum.vertretenDurch}</p>
 
       <h2>Kontakt</h2>
       <p>
-        Telefon: [PLATZHALTER]
+        Telefon: {legal.impressum.telefon}
         <br />
-        E-Mail: [PLATZHALTER]
+        E-Mail: {legal.impressum.email}
       </p>
 
       <h2>Zuständige Aufsichtsbehörde</h2>
-      <p>[PLATZHALTER: zuständiges Ministerium des Landes Baden-Württemberg]</p>
+      <p>{legal.impressum.aufsichtsbehoerde}</p>
 
       <h2>Verantwortlich für den Inhalt gemäß § 18 Abs. 2 MStV</h2>
-      <p>[PLATZHALTER: Name und Anschrift der inhaltlich verantwortlichen Person]</p>
+      <p>{legal.impressum.verantwortlichFuerInhalt}</p>
 
       <h2>Technische Umsetzung</h2>
       <p>

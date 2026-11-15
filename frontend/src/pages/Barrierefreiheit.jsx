@@ -1,13 +1,17 @@
 import LegalPageLayout from '../components/LegalPageLayout';
 import { ORG_NAME } from '../constants/brand';
+import legal from '../config/legal.json';
 
 // Required under § 10 Abs. 1 L-BGG (which points to BITV 2.0 / EN 301 549 /
 // WCAG 2.1). Deliberately does NOT claim full compliance — no formal audit
 // has been run yet, only an initial implementation pass (lang attribute,
 // skip link, aria-labels, focus-visible styles). Update the compliance
 // status + known-barriers list once a real BITV self-test (bitvtest.de) or
-// third-party audit has been done. [PLATZHALTER] fields need LAZBW's exact
-// feedback contact — see docs/bw-rebrand-plan.md, Open Items #2/#3.
+// third-party audit has been done. The real feedback contact lives in
+// frontend/src/config/legal.json (gitignored — copy legal.example.json to
+// legal.json and fill in LAZBW's exact details before this app goes fully
+// public — see README's Quick Start and docs/bw-rebrand-plan.md, Open Items
+// #2/#3).
 export default function Barrierefreiheit() {
   return (
     <LegalPageLayout title="Erklärung zur Barrierefreiheit">
@@ -47,9 +51,9 @@ export default function Barrierefreiheit() {
         <br />
         {ORG_NAME}
         <br />
-        E-Mail: [PLATZHALTER]
+        E-Mail: {legal.barrierefreiheit.feedbackEmail}
         <br />
-        Telefon: [PLATZHALTER]
+        Telefon: {legal.barrierefreiheit.feedbackTelefon}
       </p>
 
       <h2>Schlichtungsverfahren</h2>

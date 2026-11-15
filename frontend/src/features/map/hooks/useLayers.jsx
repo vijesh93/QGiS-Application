@@ -88,14 +88,18 @@ export function useLayers() {
 
   // Maps a 0-100% master position independently onto each active multi-band
   // layer's own band range: 0% = band 1 (first timestep) for every layer,
-  // 100% = each layer's own last band. Layers with bandCount <= 1 are left
-  // untouched — the master control has no effect on static layers.
+  // 100% = each layer's own last band. Layers with bandCount <= 1, and
+  // distribution-mode layers (band_mode === 'distribution', e.g. median/
+  // p17/p83/... statistics), are left untouched — the former have nothing
+  // to scrub, the latter must always stay pinned to band 1 (the map-click
+  // popup is how their other bands surface, never the slider).
   const applyMasterPercentage = useCallback((pct) => {
     setSelectedBands((prev) => {
       const next = { ...prev };
       allLayersRef.current.forEach((layer) => {
         if (!activeLayersRef.current[layer.id]) return;
         if (!layer.bandCount || layer.bandCount <= 1) return;
+        if (layer.bandMode === 'distribution') return;
         const band = 1 + Math.round((pct / 100) * (layer.bandCount - 1));
         next[layer.id] = Math.min(layer.bandCount, Math.max(1, band));
       });

@@ -20,6 +20,7 @@ gets it added automatically instead of needing a one-off manual ALTER.
 import argparse
 import json
 import os
+import re
 import subprocess
 from datetime import date
 from pathlib import Path
@@ -47,8 +48,15 @@ UNCATEGORIZED     = "Uncategorized"
 _BAND_MEAN_TMP_SUFFIX = ".band_mean_tmp.tif"
 
 _SIDECAR_SUFFIX = ".meta.json"
-_SIDECAR_SCHEMA_VERSION = 1
+_SIDECAR_SCHEMA_VERSION = 2  # bumped for subcategory/band_mode; cosmetic marker only
 _SIDECAR_MTIME_TOLERANCE_S = 2.0  # rsync/filesystem timestamp rounding slack
+
+_BAND_DISPLAY_MODES_PATH = _SCRIPT_DIR / "band_display_modes.json"
+_VALID_BAND_MODES = {"sequence", "distribution"}
+_DEFAULT_BAND_MODE = "sequence"
+
+_TIME_HORIZON_RE = re.compile(r"^([A-Za-z]+)_(\d{4}-\d{4})$")
+_ABS_DELTA_SUFFIX_RE = re.compile(r"_(abs|delta)$", re.IGNORECASE)
 
 # Path as seen by the raster-server container (its volume mount is also ./data → /data)
 def raster_server_path(rel_path: Path) -> str:
@@ -78,6 +86,82 @@ def relative_to_optimized(cog: Path) -> Path:
     if len(rel.parts) == 1:
         return Path(UNCATEGORIZED) / rel
     return rel
+
+
+def _derive_subcategory(rel_path: Path) -> Optional[str]:
+    """Second-level grouping for deeply-nested datasets, e.g. the Variable
+    folder ('bio01') in 'SSP2-4.5/bio01/Far_2071-2100/KliMP_..._abs.tif'.
+    Generic and NOT gated by band_display_modes.json — any future dataset
+    nested more than 2 levels deep under Optimized_Raster/ gets a
+    subcategory for free. None for every shallower layer (today's norm),
+    which the frontend already treats as "no subgroup" (see useLayers.jsx's
+    groupedLayers: `layer.subcategory || ''`).
+    """
+    return rel_path.parts[1] if len(rel_path.parts) > 2 else None
+
+
+def _prettify_display_name(rel_path: Path, stem: str) -> str:
+    """Best-effort, generic prettifier: when the raster's immediate parent
+    folder matches '<Label>_<yyyy>-<yyyy>' (e.g. 'Far_2071-2100') AND the
+    filename stem ends in '_abs' or '_delta', builds e.g.
+    'Bio01 — Far (2071-2100) — Absolute'. The variable prefix is included
+    whenever the path is deep enough to have one (>= 4 parts) so the name
+    stays self-contained even where sidebar grouping context isn't visible
+    (e.g. inside the pixel-value popup, which shows only the layer name on
+    its own) — two variables sharing the same time-horizon/abs-delta
+    combination must not render identical, ambiguous names. Falls back to
+    today's plain title-cased-stem behavior for every file that doesn't
+    match, so no existing layer's name changes.
+    """
+    if len(rel_path.parts) < 2:
+        return stem.replace("_", " ").title()
+
+    horizon_match = _TIME_HORIZON_RE.match(rel_path.parts[-2])
+    suffix_match = _ABS_DELTA_SUFFIX_RE.search(stem)
+    if not (horizon_match and suffix_match):
+        return stem.replace("_", " ").title()
+
+    time_label, year_range = horizon_match.group(1), horizon_match.group(2)
+    kind = "Absolute" if suffix_match.group(1).lower() == "abs" else "Delta"
+    time_part = f"{time_label} ({year_range}) — {kind}"
+
+    if len(rel_path.parts) >= 4:
+        variable = rel_path.parts[1].replace("_", " ").title()
+        return f"{variable} — {time_part}"
+    return time_part
+
+
+def _load_band_display_modes() -> dict:
+    """Maps a layer's top-level category (rel_path.parts[0]) to a band_mode
+    override ("distribution"), read from data/band_display_modes.json.
+    Categories not listed default to "sequence" — today's time-slider
+    behavior — so every existing dataset (aspect, ssp_245, ssp_370,
+    Year_2026, ...) is completely unaffected by this file's existence.
+
+    A MISSING manifest is deliberately NOT a hard error: this script must
+    keep working on a fresh checkout/server before anyone's added the
+    file, and the safe default (everything falls back to "sequence", i.e.
+    no behavior change at all) is exactly what should happen in that case.
+    A PRESENT-but-malformed manifest (bad JSON, or a value outside
+    {"sequence", "distribution"}) IS a hard error — silently ignoring a
+    typo'd manifest would be far more confusing than failing loudly, since
+    the feature would look "broken" for no visible reason.
+    """
+    if not _BAND_DISPLAY_MODES_PATH.exists():
+        return {}
+    try:
+        payload = json.loads(_BAND_DISPLAY_MODES_PATH.read_text())
+    except json.JSONDecodeError as e:
+        raise RuntimeError(f"{_BAND_DISPLAY_MODES_PATH} is not valid JSON: {e}") from e
+
+    modes = payload.get("modes", {})
+    for category, mode in modes.items():
+        if mode not in _VALID_BAND_MODES:
+            raise RuntimeError(
+                f"{_BAND_DISPLAY_MODES_PATH}: category '{category}' has invalid "
+                f"band_mode '{mode}' — must be one of {sorted(_VALID_BAND_MODES)}."
+            )
+    return modes
 
 # ── DB connection ─────────────────────────────────────────────────────────────
 DB_URL = os.getenv("DATABASE_URL")
@@ -126,6 +210,7 @@ def write_metadata_sidecar(optimized: Path, record: dict) -> None:
         "slug": record["slug"],
         "display_name": record["display_name"],
         "category": record["category"],
+        "subcategory": record["subcategory"],
         "layer_type": record["layer_type"],
         "file_path": record["file_path"],
         "bbox": record["bbox"],
@@ -135,6 +220,7 @@ def write_metadata_sidecar(optimized: Path, record: dict) -> None:
         "band_start_date": record["band_start_date"].isoformat() if record["band_start_date"] else None,
         "band_date_step_days": record["band_date_step_days"],
         "band_labels": record["band_labels"],
+        "band_mode": record["band_mode"],
     }
     _sidecar_path(optimized).write_text(json.dumps(payload, indent=2))
 
@@ -169,6 +255,7 @@ def read_metadata_sidecar(optimized: Path) -> Optional[dict]:
         "slug": payload["slug"],
         "display_name": payload["display_name"],
         "category": payload["category"],
+        "subcategory": payload.get("subcategory"),
         "layer_type": payload["layer_type"],
         "file_path": payload["file_path"],
         "bbox": payload["bbox"],
@@ -178,6 +265,7 @@ def read_metadata_sidecar(optimized: Path) -> Optional[dict]:
         "band_start_date": band_start_date,
         "band_date_step_days": payload["band_date_step_days"],
         "band_labels": payload.get("band_labels"),
+        "band_mode": payload.get("band_mode", _DEFAULT_BAND_MODE),
     }
 
 
@@ -197,15 +285,21 @@ def ensure_schema(cur) -> None:
     equivalent manual command rather than limping on to an INSERT that
     would fail anyway with a less obvious "column does not exist" error.
     """
-    try:
-        cur.execute("ALTER TABLE layer_metadata ADD COLUMN IF NOT EXISTS band_labels TEXT[];")
-    except Exception as e:
-        raise RuntimeError(
-            "Could not auto-apply the layer_metadata schema update. If the DB role this "
-            "script connects as doesn't have ALTER TABLE rights, run this once by hand "
-            "(e.g. via `docker exec <db-container> psql -U <role> -d <db> -c \"...\"`): "
-            "ALTER TABLE layer_metadata ADD COLUMN IF NOT EXISTS band_labels TEXT[];"
-        ) from e
+    statements = [
+        "ALTER TABLE layer_metadata ADD COLUMN IF NOT EXISTS band_labels TEXT[];",
+        "ALTER TABLE layer_metadata ADD COLUMN IF NOT EXISTS subcategory VARCHAR(100);",
+        "ALTER TABLE layer_metadata ADD COLUMN IF NOT EXISTS band_mode VARCHAR(20) NOT NULL DEFAULT 'sequence';",
+    ]
+    for stmt in statements:
+        try:
+            cur.execute(stmt)
+        except Exception as e:
+            raise RuntimeError(
+                "Could not auto-apply the layer_metadata schema update. If the DB role this "
+                "script connects as doesn't have ALTER TABLE rights, run this once by hand "
+                "(e.g. via `docker exec <db-container> psql -U <role> -d <db> -c \"...\"`):\n"
+                f"  {stmt}"
+            ) from e
 
 
 def _upsert_layer_metadata(cur, record: dict) -> None:
@@ -215,23 +309,26 @@ def _upsert_layer_metadata(cur, record: dict) -> None:
     """
     query = """
         INSERT INTO layer_metadata (
-            slug, display_name, category, layer_type, file_path, bbox,
+            slug, display_name, category, subcategory, layer_type, file_path, bbox,
             min_value, max_value, band_count, band_start_date, band_date_step_days,
-            band_labels
+            band_labels, band_mode
         )
-        VALUES (%(slug)s, %(display_name)s, %(category)s, %(layer_type)s, %(file_path)s,
+        VALUES (%(slug)s, %(display_name)s, %(category)s, %(subcategory)s, %(layer_type)s, %(file_path)s,
                 ST_GeomFromText(%(bbox)s, 4326), %(min_value)s, %(max_value)s, %(band_count)s,
-                %(band_start_date)s, %(band_date_step_days)s, %(band_labels)s)
+                %(band_start_date)s, %(band_date_step_days)s, %(band_labels)s, %(band_mode)s)
         ON CONFLICT (slug) DO UPDATE SET
-            category             = EXCLUDED.category,
-            file_path            = EXCLUDED.file_path,
-            bbox                 = EXCLUDED.bbox,
-            min_value            = EXCLUDED.min_value,
-            max_value            = EXCLUDED.max_value,
-            band_count           = EXCLUDED.band_count,
-            band_start_date      = EXCLUDED.band_start_date,
-            band_date_step_days  = EXCLUDED.band_date_step_days,
-            band_labels          = EXCLUDED.band_labels;
+            display_name         = EXCLUDED.display_name,
+            category              = EXCLUDED.category,
+            subcategory           = EXCLUDED.subcategory,
+            file_path             = EXCLUDED.file_path,
+            bbox                  = EXCLUDED.bbox,
+            min_value             = EXCLUDED.min_value,
+            max_value             = EXCLUDED.max_value,
+            band_count            = EXCLUDED.band_count,
+            band_start_date       = EXCLUDED.band_start_date,
+            band_date_step_days   = EXCLUDED.band_date_step_days,
+            band_labels           = EXCLUDED.band_labels,
+            band_mode             = EXCLUDED.band_mode;
     """
     cur.execute(query, record)
 
@@ -261,6 +358,7 @@ def register_rasters(fast: bool = False):
     ensure_schema(cur)
     conn.commit()
 
+    band_display_modes = _load_band_display_modes()
     success, skipped = 0, 0
 
     for optimized in optimized_files:
@@ -277,8 +375,9 @@ def register_rasters(fast: bool = False):
                 continue
             _upsert_layer_metadata(cur, record)
             print(f"✅ Registered (fast): {record['slug']} (category: {record['category']}, "
-                  f"range: {record['min_value']}..{record['max_value']}, bands: {record['band_count']}, "
-                  f"start: {record['band_start_date']}, step_days: {record['band_date_step_days']})")
+                  f"subcategory: {record['subcategory']}, range: {record['min_value']}..{record['max_value']}, "
+                  f"bands: {record['band_count']}, start: {record['band_start_date']}, "
+                  f"step_days: {record['band_date_step_days']}, mode: {record['band_mode']})")
             success += 1
             continue
 
@@ -349,13 +448,16 @@ def register_rasters(fast: bool = False):
         # raw file's stem in the normal case, by construction of
         # cog_optimizer.py.
         slug         = f"{category}_{optimized.stem}".lower()
-        display_name = optimized.stem.replace("_", " ").title()
+        display_name = _prettify_display_name(rel_path, optimized.stem)
+        subcategory  = _derive_subcategory(rel_path)
+        band_mode    = band_display_modes.get(category, _DEFAULT_BAND_MODE)
         server_path  = raster_server_path(rel_path)
 
         record = {
             "slug": slug,
             "display_name": display_name,
             "category": category,
+            "subcategory": subcategory,
             "layer_type": "raster",
             "file_path": server_path,
             "bbox": meta["bbox"],
@@ -365,12 +467,13 @@ def register_rasters(fast: bool = False):
             "band_start_date": band_start_date,
             "band_date_step_days": band_date_step_days,
             "band_labels": band_labels,
+            "band_mode": band_mode,
         }
         _upsert_layer_metadata(cur, record)
         write_metadata_sidecar(optimized, record)
-        print(f"✅ Registered: {slug} (category: {category}, range: {min_value}..{max_value}, "
-              f"bands: {band_count}, start: {band_start_date}, step_days: {band_date_step_days}, "
-              f"labels: {band_labels})")
+        print(f"✅ Registered: {slug} (category: {category}, subcategory: {subcategory}, "
+              f"range: {min_value}..{max_value}, bands: {band_count}, start: {band_start_date}, "
+              f"step_days: {band_date_step_days}, labels: {band_labels}, mode: {band_mode})")
         success += 1
 
     # Step 4: Diagnostic-only pass over RASTER_DIR, purely to preserve the
