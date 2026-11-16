@@ -37,11 +37,18 @@ class LayerRepository:
         return self.session.exec(statement).all()
 
     def get_by_category(self, category: str) -> Layer:
-        # We select specific fields and transform the bbox on the fly
+        # We select specific fields and transform the bbox on the fly.
+        # ORDER BY display_name: deeply-nested layers now name themselves
+        # "<Absolute|Delta> — <TimeLabel> (<years>)" (see register_layers.py's
+        # _prettify_display_name) specifically so this alphabetical sort
+        # groups every Absolute layer together, then every Delta layer
+        # together, instead of interleaving them by time horizon. A
+        # harmless no-op reordering for every shallower category, whose
+        # names were already close to alphabetical by construction.
         statement = self._get_base_select().where(
-            Layer.category == category, 
+            Layer.category == category,
             Layer.is_active == True
-        )
+        ).order_by(Layer.display_name)
         return self.session.exec(statement).all()
         
     def get_by_slug(self, slug: str) -> Layer | None:

@@ -66,13 +66,31 @@ export default function PixelValuePopup({ x, y, layer, selectedBand, values, loa
         borderBottom: '1px solid #47403C',
         background:   'rgba(71, 64, 60, 0.9)',
       }}>
-        <span style={{
-          flex: 1, fontSize: '11px', fontWeight: 700,
-          letterSpacing: '0.07em', textTransform: 'uppercase',
-          color: '#BBB6B5', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-        }}>
-          {layer.name}
-        </span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {/* Subcategory (e.g. the Variable, "bio01") is shown here rather
+              than baked into display_name — the sidebar already shows it
+              as a heading above these layers, so the name itself stays
+              short, but the popup has no sidebar context visible, so two
+              variables sharing the same time-horizon/kind would otherwise
+              render identical, ambiguous headers. */}
+          {layer.subcategory && (
+            <div style={{
+              fontSize: '9px', fontWeight: 700,
+              letterSpacing: '0.08em', textTransform: 'uppercase',
+              color: '#918C8C', marginBottom: '1px',
+              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+            }}>
+              {layer.subcategory}
+            </div>
+          )}
+          <div style={{
+            fontSize: '11px', fontWeight: 700,
+            letterSpacing: '0.07em', textTransform: 'uppercase',
+            color: '#BBB6B5', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+          }}>
+            {layer.name}
+          </div>
+        </div>
         <button
           onClick={onClose}
           title="Close"

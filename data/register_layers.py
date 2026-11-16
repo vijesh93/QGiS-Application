@@ -104,14 +104,22 @@ def _prettify_display_name(rel_path: Path, stem: str) -> str:
     """Best-effort, generic prettifier: when the raster's immediate parent
     folder matches '<Label>_<yyyy>-<yyyy>' (e.g. 'Far_2071-2100') AND the
     filename stem ends in '_abs' or '_delta', builds e.g.
-    'Bio01 — Far (2071-2100) — Absolute'. The variable prefix is included
-    whenever the path is deep enough to have one (>= 4 parts) so the name
-    stays self-contained even where sidebar grouping context isn't visible
-    (e.g. inside the pixel-value popup, which shows only the layer name on
-    its own) — two variables sharing the same time-horizon/abs-delta
-    combination must not render identical, ambiguous names. Falls back to
-    today's plain title-cased-stem behavior for every file that doesn't
-    match, so no existing layer's name changes.
+    'Absolute — Far (2071-2100)'. The Absolute/Delta kind leads
+    deliberately — sorting layers by display_name (see
+    layer_repo.py's get_by_category, which now does exactly that) then
+    groups every Absolute layer together and every Delta layer together,
+    instead of interleaving them by time horizon.
+
+    Does NOT include the variable name (e.g. 'bio01') — it's already shown
+    as the subcategory heading in the sidebar directly above these layers,
+    so repeating it in every one of their names would be redundant. The
+    pixel-value popup, which shows only one layer's name at a time with no
+    sidebar context visible, separately prepends the subcategory there
+    instead (see PixelValuePopup.jsx) so two variables sharing the same
+    time-horizon/kind still read unambiguously in that context.
+
+    Falls back to today's plain title-cased-stem behavior for every file
+    that doesn't match, so no existing (shallower) layer's name changes.
     """
     if len(rel_path.parts) < 2:
         return stem.replace("_", " ").title()
@@ -123,12 +131,7 @@ def _prettify_display_name(rel_path: Path, stem: str) -> str:
 
     time_label, year_range = horizon_match.group(1), horizon_match.group(2)
     kind = "Absolute" if suffix_match.group(1).lower() == "abs" else "Delta"
-    time_part = f"{time_label} ({year_range}) — {kind}"
-
-    if len(rel_path.parts) >= 4:
-        variable = rel_path.parts[1].replace("_", " ").title()
-        return f"{variable} — {time_part}"
-    return time_part
+    return f"{kind} — {time_label} ({year_range})"
 
 
 def _load_band_display_modes() -> dict:
