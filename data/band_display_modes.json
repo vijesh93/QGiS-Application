@@ -1,6 +1,7 @@
 {
   "schema_version": 1,
   "modes": {
+    "Reference": "distribution",
     "SSP2-4.5": "distribution",
     "SSP3-7.0": "distribution"
   }

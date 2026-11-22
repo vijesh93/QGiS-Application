@@ -25,6 +25,11 @@ function MapPage() {
     expandedCategories,
     activeCount,
     activeLayersList,
+    zOrderedLayers,
+    topmostLayerId,
+    defaultTopmostLayerId,
+    hasActiveSequenceLayer,
+    bringLayerToTop,
     toggleLayer,
     setLayerOpacity,
     setLayerBand,
@@ -47,6 +52,7 @@ function MapPage() {
         setBaseMapTransparency={setBaseMapTransparency}
         masterTimePct={masterTimePct}
         onMasterTimeChange={handleMasterTimeChange}
+        showMasterTimeControl={hasActiveSequenceLayer}
         groupedLayers={groupedLayers}
         activeLayers={activeLayers}
         opacities={opacities}
@@ -68,8 +74,10 @@ function MapPage() {
         <MapView
           BaseMapTransparency={BaseMapTransparency}
           activeLayersList={activeLayersList}
+          zOrderedLayers={zOrderedLayers}
           opacities={opacities}
           selectedBands={selectedBands}
+          topmostLayerId={topmostLayerId}
         />
         <ActiveLayersLegend
           activeLayersList={activeLayersList}
@@ -79,6 +87,9 @@ function MapPage() {
           setLayerBand={setLayerBand}
           toggleLayer={toggleLayer}
           allLayers={allLayers}
+          topmostLayerId={topmostLayerId}
+          defaultTopmostLayerId={defaultTopmostLayerId}
+          onBringToTop={bringLayerToTop}
         />
       </div>
     </div>

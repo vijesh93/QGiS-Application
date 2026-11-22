@@ -18,6 +18,7 @@ repo, so a server DB that was provisioned before a given column existed
 gets it added automatically instead of needing a one-off manual ALTER.
 """
 import argparse
+import csv
 import json
 import os
 import re
@@ -57,6 +58,8 @@ _DEFAULT_BAND_MODE = "sequence"
 
 _TIME_HORIZON_RE = re.compile(r"^([A-Za-z]+)_(\d{4}-\d{4})$")
 _ABS_DELTA_SUFFIX_RE = re.compile(r"_(abs|delta)$", re.IGNORECASE)
+
+_DISPLAY_NAME_CATALOG_FILENAME = "catalog_portal.csv"
 
 # Path as seen by the raster-server container (its volume mount is also ./data → /data)
 def raster_server_path(rel_path: Path) -> str:
@@ -165,6 +168,41 @@ def _load_band_display_modes() -> dict:
                 f"band_mode '{mode}' — must be one of {sorted(_VALID_BAND_MODES)}."
             )
     return modes
+
+
+def _load_display_name_catalog() -> dict:
+    """Maps a raster's path (relative to RASTER_DIR, POSIX-style — exactly
+    what relative_to_optimized()/relative_to_raster() produce) to the
+    display name a data drop's own catalog_portal.csv says it should have
+    in the frontend. Looked for directly in RASTER_DIR rather than
+    anywhere fixed in the repo, since a catalog travels with its own data
+    drop — new raw data replaces the whole Raster/ tree wholesale (e.g.
+    the Nov 2026 KliMP re-delivery, renamed in as Raster/ alongside the
+    previous drop kept at Raster_old/), and a future drop's catalog may
+    cover a different set of files entirely.
+
+    Takes priority over _prettify_display_name()'s filename-pattern
+    heuristic wherever a path is listed, specifically because filename
+    conventions can (and did) change between data drops in ways that
+    silently stop matching that heuristic's regexes — e.g. this drop's
+    'absolute_2071-2100.tif' no longer ends in '_abs' the way
+    'KliMP_bio01_ssp245_far_abs.tif' did. The catalog is authoritative
+    when present; the heuristic remains the fallback for any raster path
+    the catalog doesn't cover (including a future drop with no catalog at
+    all, where this function returns {} and every file falls through to
+    it exactly as before this mechanism existed).
+    """
+    catalog_path = RASTER_DIR / _DISPLAY_NAME_CATALOG_FILENAME
+    if not catalog_path.exists():
+        return {}
+    mapping = {}
+    with catalog_path.open(newline="", encoding="utf-8") as f:
+        for row in csv.DictReader(f):
+            path = (row.get("path") or "").strip()
+            name = (row.get("display_name") or "").strip()
+            if path and name:
+                mapping[path] = name
+    return mapping
 
 # ── DB connection ─────────────────────────────────────────────────────────────
 DB_URL = os.getenv("DATABASE_URL")
@@ -362,6 +400,7 @@ def register_rasters(fast: bool = False):
     conn.commit()
 
     band_display_modes = _load_band_display_modes()
+    display_name_catalog = _load_display_name_catalog()
     success, skipped = 0, 0
 
     for optimized in optimized_files:
@@ -444,15 +483,24 @@ def register_rasters(fast: bool = False):
         generate_band_vrts(optimized, band_count)
 
         # Step 3: Register in database
-        # slug is prefixed with category so identically-named files in
-        # different category folders don't collide on the UNIQUE slug
-        # column. Built from optimized.stem (not the raw file's) since
-        # that's the only filename guaranteed to exist — identical to the
-        # raw file's stem in the normal case, by construction of
-        # cog_optimizer.py.
-        slug         = f"{category}_{optimized.stem}".lower()
-        display_name = _prettify_display_name(rel_path, optimized.stem)
+        # slug is prefixed with category (and subcategory, when present) so
+        # identically-named files don't collide on the UNIQUE slug column.
+        # subcategory is required here, not optional: some data drops name
+        # every file within a category identically across variables (e.g.
+        # 'absolute_2071-2100.tif' is the exact same filename for bio01,
+        # bio05, bio06, and bio12 under SSP2-4.5/Far_2071-2100/) — category
+        # + stem alone would collide across all of them and silently
+        # overwrite 3 of every 4 variables via the ON CONFLICT upsert.
+        # Built from optimized.stem (not the raw file's) since that's the
+        # only filename guaranteed to exist — identical to the raw file's
+        # stem in the normal case, by construction of cog_optimizer.py.
         subcategory  = _derive_subcategory(rel_path)
+        slug_parts   = [category] + ([subcategory] if subcategory else []) + [optimized.stem]
+        slug         = "_".join(slug_parts).lower()
+        display_name = (
+            display_name_catalog.get(rel_path.as_posix())
+            or _prettify_display_name(rel_path, optimized.stem)
+        )
         band_mode    = band_display_modes.get(category, _DEFAULT_BAND_MODE)
         server_path  = raster_server_path(rel_path)
 

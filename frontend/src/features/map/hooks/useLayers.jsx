@@ -13,6 +13,27 @@ export function useLayers() {
   const [searchQuery, setSearchQuery]           = useState('');
   const [rasterCount, setRasterCount]           = useState(null);
   const [expandedCategories, setExpandedCategories] = useState({});
+  // The one layer (if any) the user explicitly pinned to render above every
+  // other active layer — see bringLayerToTop(). Exclusive by design: only
+  // one layer can hold this at a time, which is exactly what makes "the
+  // topmost layer" (both the physical map stacking and the pixel-value
+  // click popup's target) unambiguous when several layers overlap.
+  const [topmostLayerId, setTopmostLayerId]     = useState(null);
+  // Real activation order of currently-active layers (oldest first, most
+  // recently activated last) — mirrors exactly what MapLibre's own stacking
+  // already does, since MapView only ever calls addLayer() at the moment a
+  // layer is activated, which always renders it above everything already
+  // present. This is DELIBERATELY separate from activeLayersList (the
+  // panel's fixed display order): without this, "the default topmost
+  // layer" could only be guessed from activeLayersList's fixed order, which
+  // does not necessarily match which layer was actually activated most
+  // recently — e.g. activating a layer that's earlier in that fixed order
+  // after one that's later in it would make the two disagree about which
+  // one is really on top. Tracking real order here keeps both the
+  // pixel-popup's no-pin fallback and the "default topmost" UI highlight
+  // (see MapPage.jsx/ActiveLayersLegend.jsx) accurate instead of
+  // coincidentally-usually-right.
+  const [zOrder, setZOrder] = useState([]);
 
   // Kept current for stable callbacks (applyMasterPercentage) that must read
   // the latest values without changing identity on every layer/toggle change.
@@ -75,7 +96,30 @@ export function useLayers() {
 
   // ── Stable callbacks — these never change identity ─────────────────────
   const toggleLayer = useCallback((layerId) => {
+    const wasActive = activeLayersRef.current[layerId];
     setActiveLayers((prev) => ({ ...prev, [layerId]: !prev[layerId] }));
+    if (wasActive) {
+      // Being turned off — release the "bring to top" pin if it was this
+      // layer's (reactivating it later shouldn't silently restore special
+      // treatment the user never re-requested), and drop it from zOrder.
+      setTopmostLayerId((prev) => (prev === layerId ? null : prev));
+      setZOrder((prev) => prev.filter((id) => id !== layerId));
+    } else {
+      // Being turned on — it's now the most-recently-activated layer,
+      // i.e. the new default topmost, exactly matching where MapView's
+      // sync effect is about to render it (map.addLayer() always appends
+      // above everything already present).
+      setZOrder((prev) => (prev.includes(layerId) ? prev : [...prev, layerId]));
+    }
+  }, []);
+
+  // Pins `layerId` as the one layer rendered above every other active
+  // layer (both on the map and as the pixel-value click popup's target —
+  // see activeLayersList below and MapView.jsx's layer-order effect).
+  // Toggle behavior: clicking the already-pinned layer's button again
+  // releases the pin, falling back to the default (unpinned) order.
+  const bringLayerToTop = useCallback((layerId) => {
+    setTopmostLayerId((prev) => (prev === layerId ? null : layerId));
   }, []);
 
   const setLayerOpacity = useCallback((layerId, value) => {
@@ -113,6 +157,8 @@ export function useLayers() {
 
   const clearAllLayers = useCallback(() => {
     setActiveLayers((prev) => Object.fromEntries(Object.keys(prev).map((k) => [k, false])));
+    setZOrder([]);
+    setTopmostLayerId(null);
   }, []);
 
   // ── Derived state — memoised to avoid unnecessary recalculations ───────
@@ -145,6 +191,16 @@ export function useLayers() {
   // ── activeLayersList: stable reference when content hasn't changed ─────
   // Without this, every call to setOpacities (e.g. moving opacity slider)
   // would create a new array → trigger MapView's sync useEffect → flicker.
+  //
+  // This is also the Active Layers panel's display order — deliberately
+  // NEVER reordered by topmostLayerId. An earlier version moved the pinned
+  // layer to the end of this array, which doubled as "which layer is
+  // topmost" for MapView, but that made a layer visibly jump to the bottom
+  // of its own list the moment you pinned it — confusing, since pinning is
+  // about map stacking, not where the layer sits in this list. MapView now
+  // takes topmostLayerId as its own separate prop and moves that layer on
+  // the actual map without touching this array at all; list position and
+  // map z-order are independent, as they should be.
   const activeLayersListRef = useRef([]);
   const activeLayersList = useMemo(() => {
     const next = allLayers.filter((l) => activeLayers[l.id]);
@@ -157,6 +213,34 @@ export function useLayers() {
     activeLayersListRef.current = next;
     return next;
   }, [allLayers, activeLayers]);
+
+  // Real-order layer objects (oldest-activated first), for MapView's
+  // pixel-popup fallback to walk when no layer is explicitly pinned.
+  const zOrderedLayers = useMemo(
+    () => zOrder.map((id) => allLayers.find((l) => l.id === id)).filter(Boolean),
+    [zOrder, allLayers]
+  );
+
+  // The layer that's topmost right now with no explicit pin — the most
+  // recently activated one still active, or null if nothing's active yet.
+  // Exposed so the UI can highlight "this is currently on top" even before
+  // the user ever clicks a "TOP" badge, not just after pinning one.
+  const defaultTopmostLayerId = zOrderedLayers.length
+    ? zOrderedLayers[zOrderedLayers.length - 1].id
+    : null;
+
+  // Whether the master time control has anything to actually do right now.
+  // applyMasterPercentage already silently no-ops for single-band and
+  // distribution-mode (median/p17/p83/...) layers — dragging the slider
+  // with only those active would visibly do nothing, which is more
+  // confusing than just not showing a control that can't act on anything.
+  // Sequence-mode multi-band layers (today: none active by default, since
+  // the old time-series/near-medium-far data was retired — see the Nov
+  // 2026 KliMP re-delivery) are the only thing this control affects.
+  const hasActiveSequenceLayer = useMemo(
+    () => activeLayersList.some((l) => l.bandCount > 1 && l.bandMode !== 'distribution'),
+    [activeLayersList]
+  );
 
   return {
     allLayers,
@@ -172,6 +256,11 @@ export function useLayers() {
     expandedCategories,
     activeCount,
     activeLayersList,
+    zOrderedLayers,
+    topmostLayerId,
+    defaultTopmostLayerId,
+    hasActiveSequenceLayer,
+    bringLayerToTop,
     toggleLayer,
     setLayerOpacity,
     setLayerBand,

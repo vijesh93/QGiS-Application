@@ -19,6 +19,9 @@ const Sidebar = ({
   // ── Master time control — drives every active multi-band layer at once ──
   masterTimePct,       // number 0-100
   onMasterTimeChange,  // function(pct) — updates the slider and every active layer's band
+  showMasterTimeControl, // boolean — whether any active layer can actually be scrubbed
+                         // (sequence-mode, bandCount > 1); hidden otherwise rather than
+                         // shown doing nothing, which read as more confusing than useful
   // ── Layer browser props (new, passed from App.jsx) ──
   groupedLayers,      // { [category]: { [subcategory]: layer[] } }
   activeLayers,       // { [layerId]: true/false }
@@ -121,31 +124,39 @@ const Sidebar = ({
           </div>
         </div>
 
-        {/* Master time control — moves every active time-series layer at once. */}
-        <div className="bg-bawu-grau-6 p-4 rounded-lg border border-bawu-grau-5 mt-3">
-          <label className="block text-sm font-medium mb-3">
-            Time Position
-          </label>
-          <input
-            type="range"
-            className="w-full h-2 bg-bawu-grau-5 rounded-lg appearance-none cursor-pointer accent-bawu-gelb"
-            min="0" max="100"
-            value={dragTimePct}
-            onChange={(e) => setDragTimePct(Number(e.target.value))}
-            onMouseUp={commitMasterTime}
-            onTouchEnd={commitMasterTime}
-            onKeyUp={commitMasterTime}
-          />
-          <div className="flex justify-between text-xs text-bawu-grau-4 mt-2 font-mono">
-            <span>Mean</span>
-            <span>{dragTimePct}%</span>
-            <span>Latest</span>
+        {/* Master time control — moves every active time-series (sequence-
+            mode) layer at once. Hidden entirely when no active layer can
+            actually be scrubbed (applyMasterPercentage already no-ops for
+            single-band and distribution-mode layers) — showing a slider
+            that visibly does nothing is more confusing than just not
+            showing it, and it also frees up space for the layer list
+            below when it isn't relevant. */}
+        {showMasterTimeControl && (
+          <div className="bg-bawu-grau-6 p-4 rounded-lg border border-bawu-grau-5 mt-3">
+            <label className="block text-sm font-medium mb-3">
+              Time Position
+            </label>
+            <input
+              type="range"
+              className="w-full h-2 bg-bawu-grau-5 rounded-lg appearance-none cursor-pointer accent-bawu-gelb"
+              min="0" max="100"
+              value={dragTimePct}
+              onChange={(e) => setDragTimePct(Number(e.target.value))}
+              onMouseUp={commitMasterTime}
+              onTouchEnd={commitMasterTime}
+              onKeyUp={commitMasterTime}
+            />
+            <div className="flex justify-between text-xs text-bawu-grau-4 mt-2 font-mono">
+              <span>Earliest</span>
+              <span>{dragTimePct}%</span>
+              <span>Latest</span>
+            </div>
+            <p className="text-[11px] text-bawu-grau-4 mt-2 leading-snug">
+              Scrubs every active multi-band layer to the same relative position in
+              its own time range. Layers without multiple timesteps are unaffected.
+            </p>
           </div>
-          <p className="text-[11px] text-bawu-grau-4 mt-2 leading-snug">
-            Scrubs every active multi-band layer to the same relative position in
-            its own time range. Layers without multiple timesteps are unaffected.
-          </p>
-        </div>
+        )}
       </div>
 
       {/* Search bar */}

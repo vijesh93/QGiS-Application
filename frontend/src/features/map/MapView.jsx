@@ -60,14 +60,15 @@ function buildLayerTileUrl(layer, selectedBand) {
 
 // We keep opacities/selectedBands in refs (not just props) so their effects
 // don't cause the add/remove sync effect to re-run.
-const MapView = ({ BaseMapTransparency, activeLayersList, opacities, selectedBands }) => {
+const MapView = ({ BaseMapTransparency, activeLayersList, zOrderedLayers, opacities, selectedBands, topmostLayerId }) => {
   const mapContainer     = useRef(null);
   const mapRef           = useRef(null);
   const mapReadyRef      = useRef(false);   // true once 'load' has fired
   const addedLayers      = useRef(new Set());
   const opacitiesRef     = useRef(opacities);
   const selectedBandsRef = useRef(selectedBands);
-  const activeLayersListRef = useRef(activeLayersList);
+  const zOrderedLayersRef = useRef(zOrderedLayers);
+  const topmostLayerIdRef = useRef(topmostLayerId);
   const lastBandRef      = useRef({});      // mapId → last-applied bidx, to skip no-op updates
   const pendingSyncRef   = useRef(null);    // queued sync call waiting for map load
   const clickSeqRef      = useRef(0);       // guards against a stale point-query response
@@ -93,7 +94,7 @@ const MapView = ({ BaseMapTransparency, activeLayersList, opacities, selectedBan
     }
   };
 
-  // Keep opacitiesRef/selectedBandsRef/activeLayersListRef current without
+  // Keep opacitiesRef/selectedBandsRef/zOrderedLayersRef current without
   // triggering effects
   useEffect(() => {
     opacitiesRef.current = opacities;
@@ -102,7 +103,10 @@ const MapView = ({ BaseMapTransparency, activeLayersList, opacities, selectedBan
     selectedBandsRef.current = selectedBands;
   });
   useEffect(() => {
-    activeLayersListRef.current = activeLayersList;
+    zOrderedLayersRef.current = zOrderedLayers;
+  });
+  useEffect(() => {
+    topmostLayerIdRef.current = topmostLayerId;
   });
 
   // Auto-dismiss the popup if its layer gets toggled off (or otherwise
@@ -139,22 +143,42 @@ const MapView = ({ BaseMapTransparency, activeLayersList, opacities, selectedBan
     map.addControl(new maplibregl.ScaleControl({ maxWidth: 120, unit: 'metric' }), 'bottom-right');
 
     // ── Click-to-inspect: topmost active layer covering the clicked point ──
-    // activeLayersList's LAST entry is the visually topmost layer (layers
-    // are only ever appended via map.addLayer() with no beforeId, never
-    // reordered) — so this walks the list end-to-start and stops at the
-    // first one whose bounds (coarse, rectangular) cover the click. Zero
-    // active layers, or none covering this point, is a silent no-op: no
-    // popup, nothing to show, no change from today's click behavior.
+    // Two cases, in priority order:
+    //  1. A layer is explicitly pinned via the "TOP" button (topmostLayerId)
+    //     — if it's active and covers this point, it always wins; that's
+    //     the whole point of the pin, regardless of where it falls in
+    //     either list below (list position and map stacking are
+    //     deliberately independent — see useLayers.jsx).
+    //  2. Otherwise, fall back to zOrderedLayers — real activation order,
+    //     oldest first — and walk it end-to-start so the first (and thus
+    //     most-recently-activated) one whose bounds (coarse, rectangular)
+    //     cover the click wins. This mirrors exactly what MapLibre's own
+    //     stacking already does (map.addLayer() always appends above
+    //     everything present), unlike activeLayersList's fixed API-fetch
+    //     order, which doesn't necessarily match activation order.
+    // Zero active layers, or none covering this point, is a silent no-op:
+    // no popup, nothing to show, no change from today's click behavior.
     map.on('click', (e) => {
-      const list = activeLayersListRef.current;
-      if (!list || list.length === 0) return;
+      const zOrdered = zOrderedLayersRef.current;
+      if (!zOrdered || zOrdered.length === 0) return;
 
       const { lng, lat } = e.lngLat;
       let topmost = null;
-      for (let i = list.length - 1; i >= 0; i--) {
-        if (coversPoint(list[i].bounds, lng, lat)) {
-          topmost = list[i];
-          break;
+
+      const pinnedId = topmostLayerIdRef.current;
+      if (pinnedId != null) {
+        const pinned = zOrdered.find((l) => l.id === pinnedId);
+        if (pinned && coversPoint(pinned.bounds, lng, lat)) {
+          topmost = pinned;
+        }
+      }
+
+      if (!topmost) {
+        for (let i = zOrdered.length - 1; i >= 0; i--) {
+          if (coversPoint(zOrdered[i].bounds, lng, lat)) {
+            topmost = zOrdered[i];
+            break;
+          }
         }
       }
       if (!topmost) return;
@@ -291,6 +315,28 @@ const MapView = ({ BaseMapTransparency, activeLayersList, opacities, selectedBan
       pendingSyncRef.current = doSync;
     }
   }, [activeLayersList]); // ← only re-runs when the list of active layers actually changes
+
+  // ── Keep the pinned layer (if any) physically on top ────────────────────
+  // Only acts when the user has explicitly pinned a layer via the "TOP"
+  // button (topmostLayerId) — with no pin, map stacking is left exactly as
+  // MapLibre's natural insertion order already has it, unchanged from
+  // before this feature existed. A brand-new layer already lands on top
+  // for free (map.addLayer() always appends above everything existing),
+  // but re-promoting an ALREADY-rendered layer — the pin button's actual
+  // use case — needs an explicit moveLayer() call, since the sync effect
+  // above skips any layer already in addedLayers. Runs after that effect
+  // (declared later → same commit, later order) so it always sees the
+  // layer it's about to move already added.
+  useEffect(() => {
+    if (!mapReadyRef.current || !mapRef.current) return;
+    if (topmostLayerId == null) return;
+    if (!activeLayersList.some((l) => l.id === topmostLayerId)) return;
+    const map = mapRef.current;
+    const mapId = toMapId(topmostLayerId);
+    try {
+      if (map.getLayer(mapId)) map.moveLayer(mapId); // no beforeId = move to very top
+    } catch (e) { /* ignore */ }
+  }, [activeLayersList, topmostLayerId]);
 
   // ── Update opacity on already-added layers ─────────────────────────────
   useEffect(() => {
