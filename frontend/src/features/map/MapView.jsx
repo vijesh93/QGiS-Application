@@ -15,6 +15,33 @@ function coversPoint(bounds, lng, lat) {
   return lng >= west && lng <= east && lat >= south && lat <= north;
 }
 
+// Resolves which active layer is "topmost" at a given point — the single
+// source of truth for this, used both by the click handler (to open a new
+// popup) and by the pin-change effect below (to re-target an already-open
+// one), so the two can never disagree about what "topmost" means.
+//
+// Priority order:
+//  1. An explicit pin (topmostLayerId) wins if it's active and covers this
+//     point — that's the whole point of pinning, regardless of where it
+//     falls in zOrderedLayers (list position and map stacking are
+//     deliberately independent — see useLayers.jsx).
+//  2. Otherwise, zOrderedLayers — real activation order, oldest first —
+//     walked end-to-start, so the most-recently-activated layer whose
+//     bounds (coarse, rectangular) cover the point wins. This mirrors
+//     exactly what MapLibre's own stacking already does (map.addLayer()
+//     always appends above everything present).
+// Returns null if nothing active covers this point.
+function resolveTopmostLayer(zOrderedLayers, pinnedId, lng, lat) {
+  if (pinnedId != null) {
+    const pinned = zOrderedLayers.find((l) => l.id === pinnedId);
+    if (pinned && coversPoint(pinned.bounds, lng, lat)) return pinned;
+  }
+  for (let i = zOrderedLayers.length - 1; i >= 0; i--) {
+    if (coversPoint(zOrderedLayers[i].bounds, lng, lat)) return zOrderedLayers[i];
+  }
+  return null;
+}
+
 // Rough footprint used only to keep the popup from overflowing the map
 // container on clicks near an edge — doesn't need to be exact, just in
 // the right ballpark.
@@ -75,6 +102,8 @@ const MapView = ({ BaseMapTransparency, activeLayersList, zOrderedLayers, opacit
                                              // landing after a newer click superseded it
   const markerRef        = useRef(null);    // the single maplibregl.Marker marking whichever
                                              // pixel the popup (if any) is currently showing
+  const pixelPopupRef    = useRef(null);    // mirrors pixelPopup state, read (not written) by
+                                             // the "re-target on topmost change" effect below
 
   // Pixel-value popup state: null when no popup is shown, otherwise
   // { x, y, layer, values, loading, error }. `values` holds every band's
@@ -107,6 +136,9 @@ const MapView = ({ BaseMapTransparency, activeLayersList, zOrderedLayers, opacit
   });
   useEffect(() => {
     topmostLayerIdRef.current = topmostLayerId;
+  });
+  useEffect(() => {
+    pixelPopupRef.current = pixelPopup;
   });
 
   // Auto-dismiss the popup if its layer gets toggled off (or otherwise
@@ -143,19 +175,6 @@ const MapView = ({ BaseMapTransparency, activeLayersList, zOrderedLayers, opacit
     map.addControl(new maplibregl.ScaleControl({ maxWidth: 120, unit: 'metric' }), 'bottom-right');
 
     // ── Click-to-inspect: topmost active layer covering the clicked point ──
-    // Two cases, in priority order:
-    //  1. A layer is explicitly pinned via the "TOP" button (topmostLayerId)
-    //     — if it's active and covers this point, it always wins; that's
-    //     the whole point of the pin, regardless of where it falls in
-    //     either list below (list position and map stacking are
-    //     deliberately independent — see useLayers.jsx).
-    //  2. Otherwise, fall back to zOrderedLayers — real activation order,
-    //     oldest first — and walk it end-to-start so the first (and thus
-    //     most-recently-activated) one whose bounds (coarse, rectangular)
-    //     cover the click wins. This mirrors exactly what MapLibre's own
-    //     stacking already does (map.addLayer() always appends above
-    //     everything present), unlike activeLayersList's fixed API-fetch
-    //     order, which doesn't necessarily match activation order.
     // Zero active layers, or none covering this point, is a silent no-op:
     // no popup, nothing to show, no change from today's click behavior.
     map.on('click', (e) => {
@@ -163,24 +182,7 @@ const MapView = ({ BaseMapTransparency, activeLayersList, zOrderedLayers, opacit
       if (!zOrdered || zOrdered.length === 0) return;
 
       const { lng, lat } = e.lngLat;
-      let topmost = null;
-
-      const pinnedId = topmostLayerIdRef.current;
-      if (pinnedId != null) {
-        const pinned = zOrdered.find((l) => l.id === pinnedId);
-        if (pinned && coversPoint(pinned.bounds, lng, lat)) {
-          topmost = pinned;
-        }
-      }
-
-      if (!topmost) {
-        for (let i = zOrdered.length - 1; i >= 0; i--) {
-          if (coversPoint(zOrdered[i].bounds, lng, lat)) {
-            topmost = zOrdered[i];
-            break;
-          }
-        }
-      }
+      const topmost = resolveTopmostLayer(zOrdered, topmostLayerIdRef.current, lng, lat);
       if (!topmost) return;
 
       const seq = ++clickSeqRef.current;
@@ -196,9 +198,15 @@ const MapView = ({ BaseMapTransparency, activeLayersList, zOrderedLayers, opacit
       }
       markerRef.current.setLngLat([lng, lat]).addTo(map);
 
+      // lng/lat are kept on the popup (not just used for this fetch) so
+      // that later changing which layer is topmost — via the "TOP" button,
+      // without a new map click — can re-query the same pixel against the
+      // newly-topmost layer instead of leaving stale values on screen; see
+      // the "re-target the open popup" effect below.
       setPixelPopup({
         x: Math.min(e.point.x + POPUP_OFFSET, maxX),
         y: Math.min(e.point.y + POPUP_OFFSET, maxY),
+        lng, lat,
         layer: topmost,
         values: null,
         loading: true,
@@ -337,6 +345,40 @@ const MapView = ({ BaseMapTransparency, activeLayersList, zOrderedLayers, opacit
       if (map.getLayer(mapId)) map.moveLayer(mapId); // no beforeId = move to very top
     } catch (e) { /* ignore */ }
   }, [activeLayersList, topmostLayerId]);
+
+  // ── Re-target an already-open popup when "topmost" changes ──────────────
+  // Without this, pinning a different layer via the "TOP" button (or simply
+  // activating/deactivating layers, which shifts the natural z-order) left
+  // an open popup showing stale values for whichever layer used to be
+  // topmost — the only way to see another overlapping layer's values was to
+  // click the map again. Re-resolves topmost at the SAME lng/lat the popup
+  // is already anchored to (not a new click point) and, if that's actually
+  // a different layer than what's currently shown, re-fetches for it.
+  // zOrderedLayers is read directly (not via its ref) since this effect's
+  // own dependency array already guarantees it's current whenever this
+  // runs; pixelPopup is read via its ref instead, specifically so this
+  // effect does NOT also fire on every popup update (only on a real
+  // topmost-affecting change), which would otherwise re-run immediately
+  // after its own setPixelPopup call below for no reason.
+  useEffect(() => {
+    const prevPopup = pixelPopupRef.current;
+    if (!prevPopup) return; // no popup open — nothing to re-target
+
+    const resolved = resolveTopmostLayer(zOrderedLayers, topmostLayerId, prevPopup.lng, prevPopup.lat);
+    if (!resolved || resolved.id === prevPopup.layer.id) return; // unchanged
+
+    const seq = ++clickSeqRef.current;
+    setPixelPopup((p) => (p ? { ...p, layer: resolved, values: null, loading: true, error: false } : p));
+
+    fetchPixelValues(resolved.cog_path, prevPopup.lng, prevPopup.lat).then((values) => {
+      if (clickSeqRef.current !== seq) return; // superseded by a newer click/re-target
+      setPixelPopup((p) => (
+        p && p.layer.id === resolved.id
+          ? { ...p, values, loading: false, error: values === null }
+          : p
+      ));
+    });
+  }, [topmostLayerId, zOrderedLayers]);
 
   // ── Update opacity on already-added layers ─────────────────────────────
   useEffect(() => {
