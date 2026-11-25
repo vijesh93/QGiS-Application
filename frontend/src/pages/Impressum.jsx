@@ -37,10 +37,28 @@ export default function Impressum() {
       <h2>Verantwortlich für den Inhalt gemäß § 18 Abs. 2 MStV</h2>
       <p>{legal.impressum.verantwortlichFuerInhalt}</p>
 
-      <h2>Technische Umsetzung</h2>
+      <h2>Haftungsausschluss</h2>
       <p>
-        Diese Anwendung wird als containerisierte Webanwendung betrieben
-        (React-Frontend, FastAPI-Backend, PostGIS-Datenbank, TiTiler).
+        <strong>Haftung für Inhalte:</strong> Die Inhalte dieser Anwendung
+        wurden mit größtmöglicher Sorgfalt erstellt. Für die Richtigkeit,
+        Vollständigkeit und Aktualität der Inhalte kann jedoch keine Gewähr
+        übernommen werden.
+      </p>
+      <p>
+        <strong>Haftung für Links:</strong> Diese Anwendung kann Links zu
+        externen Webseiten Dritter enthalten, auf deren Inhalte kein Einfluss
+        besteht. Für diese fremden Inhalte kann daher keine Gewähr übernommen
+        werden; verantwortlich ist stets der jeweilige Anbieter oder Betreiber
+        der verlinkten Seiten.
+      </p>
+
+      <h2>Urheber- und Kennzeichenrecht</h2>
+      <p>
+        Die durch die Betreiber dieser Anwendung erstellten Inhalte und Werke
+        unterliegen dem deutschen Urheberrecht. Vervielfältigung, Bearbeitung,
+        Verbreitung und jede Art der Verwertung außerhalb der Grenzen des
+        Urheberrechtes bedürfen der schriftlichen Zustimmung der jeweiligen
+        Urheber bzw. Ersteller.
       </p>
 
       <p className="mt-8 text-xs text-bawu-grau-4">
