@@ -128,6 +128,12 @@ Why this shape (written for someone without a networking background):
   points `data-loader` at this Dockerfile via `dockerfile: Dockerfile.prod`; the dev
   override is untouched and still uses the full `data/Dockerfile` +
   `requirements.txt`.
+- **`data/.dockerignore`** (new): excludes `data_files/` (plus `__pycache__/`,
+  `.venv/`, `*.ipynb`) from the `data-loader` build context. Both compose files
+  bind-mount `./data:/app` at runtime, which fully supersedes anything `COPY`'d into
+  `/app` at build time — so the actual raster data was never needed in the build
+  context at all, and tarring it up on every build got slower (and, on the server,
+  outright failed — see "Known issues" below) as the real dataset grew.
 
 Run `docker compose -f docker-compose.yml -f docker-compose.prod.yml config` any time to
 sanity-check the merged production config before deploying.
@@ -180,6 +186,37 @@ This is also the answer to "build images on the server vs. bake data in": **buil
 app images on the server from the git-cloned source** (`docker compose build`, no
 registry needed), and **sync the raster data separately via `rsync`** — the 11GB payload
 never goes inside an image.
+
+### Alternative: Nextcloud zip + curl, when SSH/rsync isn't available
+
+If the server can only be administered through a web console (no SSH from the working
+machine), `rsync` isn't an option. This was validated end-to-end for a real deploy and is
+a safe fallback — just note three differences from the `rsync` path above:
+
+1. **Only zip what's actually served.** Check which subfolder(s) of the data directory
+   the running containers actually read from disk at runtime (for this app, that's
+   `Optimized_Raster/` only — raw pre-optimization files aren't read by anything once
+   deployed) rather than transferring the whole thing.
+2. **After extracting on the server, make the data world-readable before registering or
+   serving it**: `chmod -R a+rX path/to/extracted/data/`. A zip extraction's resulting
+   ownership/permission bits aren't guaranteed to match what every container's own
+   process user needs — this can surface as a Docker build-context failure (`lstat ...
+   permission denied`) or as the tile server returning 500 on every request, both from
+   the same root cause.
+3. **Don't use a "trust cached metadata" fast-registration mode that compares file
+   timestamps.** This repo's `--fast-register` flag trusts a per-file sidecar whose
+   validity check compares the data file's current filesystem mtime against what was
+   recorded locally — valid after `rsync -a` (exact mtime preservation), not after a
+   zip → cloud-upload → unzip round trip (mtime precision isn't preserved the same way).
+   Use the plain `--only-register` command (without `--fast-register`) instead — slower
+   per file, but reads real metadata directly and is immune to this.
+
+Steps: zip the relevant subfolder locally, upload it to a file-sharing service and create
+a short-lived unprotected share link (a password-protected link added auth complexity
+that wasn't worth it for a one-off, non-sensitive transfer), then on the server:
+`curl -L -o data.zip '<share-link>/download'`, extract, run the chmod above, delete the
+zip, then register with the non-fast command. Delete the share link once confirmed
+working.
 
 ---
 
