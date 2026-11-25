@@ -180,6 +180,19 @@ export function useLayers() {
       if (!groups[cat][sub]) groups[cat][sub] = [];
       groups[cat][sub].push(layer);
     });
+    // Subcategories otherwise render in whatever order the API happened to
+    // return them in (DB/filesystem traversal order, not alphabetical) —
+    // re-sort so e.g. BIO01/BIO05/BIO06/BIO12 always appear in a predictable
+    // order. `numeric: true` sorts BIO2 before BIO10 (not lexicographically).
+    Object.keys(groups).forEach((cat) => {
+      const sortedSub = {};
+      Object.keys(groups[cat])
+        .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+        .forEach((sub) => {
+          sortedSub[sub] = groups[cat][sub];
+        });
+      groups[cat] = sortedSub;
+    });
     return groups;
   }, [allLayers, searchQuery]);
 
