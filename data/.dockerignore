@@ -1,0 +1,13 @@
+# The data-loader image never needs the actual raster data baked in — both
+# docker-compose.yml and docker-compose.prod.yml bind-mount ./data:/app at
+# runtime, which fully supersedes anything COPY'd into /app at build time.
+# Excluding it here avoids needlessly tarring up hundreds of MB (and growing)
+# of COGs/sidecars into the build context on every build, which has also
+# caused the build to fail outright when a file/folder under data_files/
+# ends up with permissions the Docker build context reader can't stat.
+data_files/
+
+__pycache__/
+*.pyc
+.venv/
+*.ipynb
