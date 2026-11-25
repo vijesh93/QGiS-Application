@@ -116,6 +116,18 @@ Why this shape (written for someone without a networking background):
   overlay.
 - **`deploy/host-nginx-app.conf.example`** (new): the host-nginx template referenced
   above and in the runbook below.
+- **`data/Dockerfile.prod` + `data/requirements.prod.txt`** (new): a lean production
+  build for the `data-loader` service. In production this container only ever runs
+  the registration step against COGs already optimized locally
+  (`--skip-download --skip-optimize --only-register --fast-register`), which never
+  touches opencv/geopandas/rioxarray/pandas/scipy/matplotlib or the
+  jupyter/ipykernel/notebook stack from `data/requirements.txt` — only `rasterio`
+  (imported unconditionally by `register_layers.py`) and `psycopg2`. On a
+  small-disk VPS, installing the full dev dependency list here was enough to
+  exhaust the disk mid-build (see "Known issues" below). `docker-compose.prod.yml`
+  points `data-loader` at this Dockerfile via `dockerfile: Dockerfile.prod`; the dev
+  override is untouched and still uses the full `data/Dockerfile` +
+  `requirements.txt`.
 
 Run `docker compose -f docker-compose.yml -f docker-compose.prod.yml config` any time to
 sanity-check the merged production config before deploying.
@@ -265,6 +277,40 @@ instead of sharing one.
    `sudo ufw delete allow 8081/tcp`.
 
 ---
+
+## Known issues hit on the first real server deploy (and how they were resolved)
+
+- **A small VPS disk can run out of space mid-`docker compose up --build`,
+  especially on a container with a heavy Python dependency list.** Symptom:
+  a build step fails with `failed to create temp dir ... no space left on
+  device`, sometimes on a service that looks unrelated (e.g. a different
+  service's image export failing just because the disk happened to fill up
+  during that step). Diagnose with `df -h` (which filesystem is full) and
+  `docker system df` (Docker's own images/containers/volumes/build-cache
+  breakdown, with a reclaimable %). The build cache is usually the single
+  biggest win (`docker builder prune -af`), followed by
+  `docker image prune -a -f` for images no longer backing any container —
+  neither touches a named volume still attached to a running container, so
+  a live Postgres volume is never at risk. The actual fix for a recurring
+  case like this is the `data/Dockerfile.prod` pattern above: give a heavy
+  one-shot/pipeline container a minimal production dependency list instead
+  of installing its full dev toolbox on the server.
+- **"Site unreachable" / a DNS-style browser error doesn't necessarily mean
+  anything about this app, this server, or even this app's own DNS record is
+  wrong.** First isolate which layer is actually broken: (1) can the
+  server's bare IP be reached directly (confirms server/Docker/host-nginx/
+  firewall are fine)? (2) query a public DNS-over-HTTPS resolver directly
+  for the domain (e.g. `https://dns.google/resolve?name=<domain>&type=NS`),
+  which bypasses any local/corporate DNS cache — `Status: 3` (NXDOMAIN) with
+  no answer at all for the bare domain's own NS record means the domain's
+  **registrar-level nameserver delegation** is broken (the domain was never
+  pointed at whichever provider hosts its DNS zone), which is a different
+  and more fundamental problem than a wrong/missing record inside an
+  otherwise-correctly-delegated zone — fixing the latter does nothing if
+  the former is broken. Where to fix registrar-level delegation depends on
+  the registrar/panel in use; it is very often a different control panel
+  than the one used for day-to-day DNS record edits, so don't assume
+  they're the same screen.
 
 ## Backups & maintenance
 
