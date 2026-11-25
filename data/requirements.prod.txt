@@ -1,0 +1,15 @@
+# Production data-loader requirements.
+#
+# The server only ever runs the registration step against COGs that were
+# already optimized locally (`--skip-download --skip-optimize --only-register
+# --fast-register`), which trusts the `.meta.json` sidecars written by the
+# local run and does zero gdalinfo/rasterio-scan work of its own. The actual
+# Python-level imports it still hits are register_layers.py's own
+# `import rasterio` (unconditional, even in --fast mode) and psycopg2 for the
+# DB insert — nothing else in data/requirements.txt (opencv, geopandas,
+# rioxarray, pandas, scipy, matplotlib, jupyter/ipykernel/notebook/ipython)
+# is ever imported on this path. Keep data/requirements.txt (the full set)
+# for local/dev use, where the whole download/optimize/validate pipeline
+# actually runs.
+rasterio==1.3.9
+psycopg2-binary

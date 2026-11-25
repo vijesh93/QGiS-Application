@@ -47,6 +47,7 @@ services:
   data-loader:
     build:
       context: ./data
+      dockerfile: Dockerfile.prod
       args:
         HTTP_PROXY: ${HTTP_PROXY}
         HTTPS_PROXY: ${HTTPS_PROXY}

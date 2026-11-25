@@ -1,0 +1,43 @@
+# Production variant of data/Dockerfile — see requirements.prod.txt for why
+# this exists: the server only ever runs the registration step (--fast-register)
+# against already-optimized COGs, never download/optimize/validate, so it
+# doesn't need the heavy optimize/analysis/notebook dependencies the dev image
+# installs. Same base and system packages as data/Dockerfile, just a much
+# smaller Python dependency set.
+
+FROM python:3.11-slim
+
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG NO_PROXY
+
+ENV HTTP_PROXY=${HTTP_PROXY}
+ENV HTTPS_PROXY=${HTTPS_PROXY}
+ENV NO_PROXY=${NO_PROXY}
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+# gdal-bin/libgdal-dev: rasterio + the gdalbuildvrt/gdalinfo subprocess calls
+# in raster_utils.py. The opencv-only libs from data/Dockerfile
+# (libglib2.0-0, libsm6, libxext6, libxrender-dev) are dropped — opencv isn't
+# installed here.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    gdal-bin \
+    libgdal-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+ENV CPLUS_INCLUDE_PATH=/usr/include/gdal
+ENV C_INCLUDE_PATH=/usr/include/gdal
+
+COPY requirements.prod.txt requirements.txt
+
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+CMD ["tail", "-f", "/dev/null"]
