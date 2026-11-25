@@ -11,5 +11,12 @@
 # is ever imported on this path. Keep data/requirements.txt (the full set)
 # for local/dev use, where the whole download/optimize/validate pipeline
 # actually runs.
+#
+# numpy is pinned explicitly (matching data/requirements.txt) because
+# rasterio==1.3.9's compiled extension was built against NumPy 1.x's ABI —
+# leaving numpy unpinned lets pip install the latest NumPy 2.x, which then
+# fails with "numpy.core.multiarray failed to import" the moment rasterio
+# is imported.
+numpy==1.26.4
 rasterio==1.3.9
 psycopg2-binary
